@@ -19,4 +19,6 @@ pip install transformers accelerate pillow huggingface_hub torch torchvision fai
 AFTER, run the model in which itll start downloading all the model weights (no training required) itll be about 30gb +-5
 It should be able to run on all our device but this is just a small scale model, to utilize a better one we need to move it to a cloud computing service. 
 
+The ai project should be able to provide workout plans based on cues given and heed safety calls when detected. The temperature is set as dynamic so that the workouts aren't always the same if the user so wants. The bot should also stay within scope and prompting the user to stay on topic as to not misuse the bot. The RAG provides baseline knowledge and SAFETY_AGENT checks for any cues that may be threatening to the user and urges them to seek medical attention is needed. SCANNER checks the AI output for accuracy and relevancy. 
+
 

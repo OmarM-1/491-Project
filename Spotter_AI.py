@@ -1,108 +1,237 @@
-# qwen_vl_chat.py
-# Minimal, single-file Qwen2.5-VL-7B-Instruct chat (text and image+text).
+# Spotter_AI.py
+"""
+Unified chat backend for GymBot (Qwen Instruct family).
+- Dynamic sampling based on intent + retrieval confidence
+- Per-call seeding (no global randomness)
+- Safe context-length trimming
+- Works with tokenizer.apply_chat_template (text) or processor.apply_chat_template (VL)
 
-from typing import List, Dict, Union
-from PIL import Image
-from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+Env vars (optional):
+  SPOTTER_MODEL=Qwen/Qwen2.5-7B-Instruct
+  DEVICE_MAP=auto|cpu|cuda
+  LOAD_IN_4BIT=true|false   (requires bitsandbytes)
+"""
+
+from __future__ import annotations
+import os, re, math, hashlib
+from typing import List, Dict, Any, Optional
+
 import torch
-import os
+from transformers import (
+    AutoTokenizer,
+    AutoProcessor,          # for VL models if available
+    AutoModelForCausalLM,
+    BitsAndBytesConfig,
+)
 
-# ------------------------------
-# MODEL CHOICE (VL = vision-language)
-# ------------------------------
-MODEL_ID = "Qwen/Qwen2.5-VL-7B-Instruct"
+# --------------------
+# Model / tokenizer / processor setup
+# --------------------
+MODEL_NAME = os.getenv("SPOTTER_MODEL", "Qwen/Qwen2.5-7B-Instruct")
+DEVICE_MAP = os.getenv("DEVICE_MAP", "auto")  # "auto" | "cuda" | "cpu"
+LOAD_IN_4BIT = os.getenv("LOAD_IN_4BIT", "false").lower() in {"1","true","yes","y"}
 
-# ------------------------------
-# DEVICE & DTYPE
-# ------------------------------
-HAS_MPS = torch.backends.mps.is_available()
-HAS_CUDA = torch.cuda.is_available()
-DEVICE = "mps" if HAS_MPS else ("cuda" if HAS_CUDA else "cpu")
-
-# Prefer bfloat16 on capable GPUs; else float16 on GPU; else float32 on CPU.
-if DEVICE in ("mps", "cuda"):
-    # bfloat16 if CUDA says it’s supported; Apple “mps” generally likes float16
-    if DEVICE == "cuda" and torch.cuda.is_bf16_supported():
-        dtype = torch.bfloat16
-    else:
-        dtype = torch.float16
+# Choose dtype
+if torch.cuda.is_available():
+    DTYPE = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
 else:
-    dtype = torch.float32
+    DTYPE = torch.float32
 
-print(f"[INFO] Loading {MODEL_ID} on {DEVICE} (dtype={dtype}) ...")
+# Tokenizer (always present)
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
-# ------------------------------
-# LOAD PROCESSOR + MODEL
-# ------------------------------
-# Processor handles BOTH text formatting (chat template) and vision pre/post-processing.
-processor = AutoProcessor.from_pretrained(MODEL_ID, trust_remote_code=True, use_fast=True)
-model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-    MODEL_ID,
-    dtype=dtype,                 
-    device_map="auto",
-    trust_remote_code=True,
-).eval()
+# Try to load a processor (VL models have one); if it fails, we’ll use tokenizer for chat template
+processor = None
+try:
+    processor = AutoProcessor.from_pretrained(MODEL_NAME)
+except Exception:
+    processor = None
 
-# ------------------------------
-# HELPERS
-# ------------------------------
-def chat_text(messages: List[Dict], max_new_tokens: int = 300, temperature: float = 0.5) -> str:
+# Load model (optionally 4-bit)
+bnb_config = None
+if LOAD_IN_4BIT:
+    try:
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_compute_dtype=DTYPE,
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_quant_type="nf4",
+        )
+    except Exception:
+        bnb_config = None  # fall back to regular load
+
+model = AutoModelForCausalLM.from_pretrained(
+    MODEL_NAME,
+    device_map=DEVICE_MAP,
+    torch_dtype=DTYPE,
+    quantization_config=bnb_config if LOAD_IN_4BIT and bnb_config is not None else None,
+)
+
+# --------------------
+# Helpers: intent detection + sampling policy
+# --------------------
+def detect_intent(text: str) -> str:
+    """Very light heuristic intent classifier."""
+    t = (text or "").lower()
+    if any(k in t for k in ["injury","pain","hurts","impingement","strain","sprain","tendonitis","tendinitis","back pain","shoulder pain"]):
+        return "safety"
+    if any(k in t for k in ["plan","program","template","make me a","session","routine","workout","split"]):
+        return "plan"
+    if any(k in t for k in ["motivate","pep talk","caption","slogan"]):
+        return "creative"
+    return "knowledge"
+
+def sampling_params(intent: str, confidence: float) -> dict:
     """
-    messages example:
-    [
-      {"role": "system", "content": "You are a concise, safety-first fitness coach."},
-      {"role": "user",   "content": "Explain progressive overload in 2 sentences."}
-    ]
+    Returns kwargs for sampling. Confidence is 0..1 from your RAG.
     """
-    inputs = processor.apply_chat_template(
-        messages,
-        add_generation_prompt=True,
-        return_tensors="pt"
+    # Conservative for factual/safety or low confidence
+    if intent in {"knowledge","safety"}: return dict(do_sample=False)
+    if confidence < 0.55:              return dict(do_sample=False)
+
+    if intent == "plan":
+        return dict(do_sample=True, temperature=0.30, top_p=0.90, repetition_penalty=1.05)
+    if intent == "creative":
+        return dict(do_sample=True, temperature=0.70, top_p=0.95, repetition_penalty=1.05)
+    # default mild creativity
+    return dict(do_sample=True, temperature=0.20, top_p=0.90, repetition_penalty=1.05)
+
+def deterministic_seed_from(text: str, user_id: str = "anon") -> int:
+    """Optional: use for stable phrasing per (user, text) when sampling."""
+    h = hashlib.sha256(f"{user_id}:{text}".encode()).hexdigest()
+    return int(h, 16) % (2**31 - 1)
+
+# --------------------
+# Chat template application + safe truncation
+# --------------------
+def _apply_chat_template(msgs: List[Dict[str,str]]):
+    """
+    Returns input_ids tensor on model.device using either processor or tokenizer template.
+    """
+    obj = processor if (processor is not None and hasattr(processor, "apply_chat_template")) else tokenizer
+    return obj.apply_chat_template(
+        msgs, add_generation_prompt=True, return_tensors="pt"
     ).to(model.device)
 
-    with torch.no_grad():
-        out = model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            do_sample=True
-        )
-    return processor.batch_decode(out, skip_special_tokens=True)[0].strip()
+def _token_len(msgs: List[Dict[str,str]]) -> int:
+    try:
+        return _apply_chat_template(msgs).shape[-1]
+    except Exception:
+        # fallback: rough estimate via tokenizer
+        text = "\n".join(f"{m.get('role','user')}: {m.get('content','')}" for m in msgs)
+        return len(tokenizer.encode(text))
 
+def truncate_messages_to_fit(
+    messages: List[Dict[str,str]],
+    reserve_new_tokens: int = 400
+) -> List[Dict[str,str]]:
+    """
+    Iteratively trims oldest non-system messages until the prompt fits the model context
+    with space for generation.
+    """
+    max_ctx = getattr(tokenizer, "model_max_length", 4096)
+    cur = messages[:]
+    while True:
+        n = _token_len(cur)
+        if n + reserve_new_tokens <= max_ctx:
+            return cur
+        # drop oldest non-system message
+        drop_idx = next((i for i, m in enumerate(cur) if m.get("role") != "system"), None)
+        if drop_idx is None or len(cur) <= 2:
+            # extreme fallback: keep system + last user
+            return cur[-2:]
 
-def chat_vision(image_path: str, user_text: str) -> str:
-    img = Image.open(image_path).convert("RGB")
-    messages = [
-        {"role": "system", "content": "You are a precise, safety-first fitness coach."},
-        {"role": "user", "content": [
-            {"type": "image", "image": img},
-            {"type": "text",  "text": user_text}
-        ]}
-    ]
-    # text side (adds special tokens)
-    inputs = processor.apply_chat_template(messages, add_generation_prompt=True, return_tensors="pt")
-    # image tensors
-    vis = processor(images=[img], return_tensors="pt")
-    inputs.update(vis)
-    # move to device
-    inputs = {k: v.to(model.device) for k, v in inputs.items()}
-    with torch.no_grad():
-        out = model.generate(**inputs, max_new_tokens=300, temperature=0.2, do_sample=True)
-    return processor.batch_decode(out, skip_special_tokens=True)[0].strip()
+# --------------------
+# Public: build_messages + chat_text
+# --------------------
+def build_messages(system: str, user: str) -> List[Dict[str,str]]:
+    """Convenience to create a minimal message list."""
+    return [{"role":"system","content":system}, {"role":"user","content":user}]
 
+def chat_text(
+    messages: List[Dict[str,str]],
+    *,
+    max_new_tokens: int = 400,
+    intent: Optional[str] = None,       # pass from RAG if you already detected it
+    confidence: float = 1.0,            # 0..1 from RAG; used to tighten sampling
+    seed: Optional[int] = None,         # per-call seed for reproducible sampling
+    do_sample: Optional[bool] = None,   # manual overrides (optional)
+    temperature: Optional[float] = None,
+    top_p: Optional[float] = None,
+    repetition_penalty: Optional[float] = None,
+) -> str:
+    """
+    Text-only chat. Messages follow {"role": "...", "content": "..."}.
+    """
+    # 1) Decide sampling policy
+    last_user = ""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            last_user = m.get("content", "")
+            break
+    _intent = intent or detect_intent(last_user)
+    policy = sampling_params(_intent, confidence)
 
-# ------------------------------
-# DEMO (run: python qwen_vl_chat.py)
-# ------------------------------
+    # Allow explicit overrides
+    if do_sample is not None:          policy["do_sample"] = do_sample
+    if temperature is not None:        policy["temperature"] = temperature
+    if top_p is not None:              policy["top_p"] = top_p
+    if repetition_penalty is not None: policy["repetition_penalty"] = repetition_penalty
+
+    # 2) Trim to context
+    msgs = truncate_messages_to_fit(messages, reserve_new_tokens=max_new_tokens)
+
+    # 3) Tokenize
+    inputs = _apply_chat_template(msgs)
+
+    # 4) Generator (for reproducible sampling)
+    gen = None
+    if policy.get("do_sample", False) and seed is not None:
+        gen = torch.Generator(device=model.device).manual_seed(int(seed))
+
+    # 5) Build kwargs (avoid passing None)
+    gen_kwargs = dict(
+        max_new_tokens=max_new_tokens,
+        do_sample=policy.get("do_sample", False),
+        eos_token_id=getattr(tokenizer, "eos_token_id", None),
+        pad_token_id=getattr(tokenizer, "pad_token_id", None),
+    )
+    if gen is not None:
+        gen_kwargs["generator"] = gen
+    if gen_kwargs["do_sample"]:
+        gen_kwargs["temperature"] = float(policy.get("temperature", 0.2))
+        gen_kwargs["top_p"] = float(policy.get("top_p", 0.9))
+        gen_kwargs["repetition_penalty"] = float(policy.get("repetition_penalty", 1.0))
+        gen_kwargs["no_repeat_ngram_size"] = 3  # mild loop guard
+
+    # 6) Generate
+    model.eval()
+    with torch.inference_mode():
+        out = model.generate(**inputs, **{k:v for k,v in gen_kwargs.items() if v is not None})
+
+    text = tokenizer.batch_decode(out, skip_special_tokens=True)[0].strip()
+    return text
+
+# Public API
+__all__ = [
+    "chat_text",
+    "build_messages",
+    "detect_intent",
+    "sampling_params",
+    "deterministic_seed_from",
+]
+
+# --------------------
+# Quick manual test
+# --------------------
 if __name__ == "__main__":
-    # Text-only demo
-    text_demo = [
-        {"role": "system", "content": "You are a concise, safety-first fitness coach."},
-        {"role": "user", "content": "Make me a 3-day full-body plan for a beginner."}
-    ]
-    print("\n=== TEXT CHAT ===")
-    print(chat_text(text_demo, max_new_tokens=350, temperature=0.4))
+    system = (
+        "You are GymBot, a helpful fitness assistant. "
+        "Answer ONLY from provided context when given, be concise and actionable."
+    )
+    user = "Make me a 45-minute dumbbell push session using 1–2 RIR."
+    msgs = build_messages(system, user)
 
-    # Image+text demo (uncomment and point to a real image file on disk)
-    # print("\n=== IMAGE + TEXT CHAT ===")
-    # print(chat_vision("squat.jpg", "Is my lumbar spine neutral? Give 3 cues and a safer regression."))
+    # Example: plan intent with mild creativity; reproducible phrasing
+    seed = deterministic_seed_from(user, user_id="demo")
+    print(chat_text(msgs, intent="plan", confidence=0.85, seed=seed))

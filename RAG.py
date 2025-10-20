@@ -1,11 +1,29 @@
-# gymbot_rag_v2.py
-import os, re, json, math, argparse
+"""
+Cores 1–6 RAG for GymBot with dynamic handoff to Spotter_AI.chat_text:
+1) Knowledge base + chunking
+2) Hybrid retrieval (embeddings+FAISS + BM25)
+3) Cross-encoder reranker
+4) Confidence meter
+5) Prompt/spec
+6) End-to-end generate_grounded_answer(query)
+"""
+
+from __future__ import annotations
+import os, re, json, math
+from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
-from typing import List, Dict, Any, Tuple, Optional
 from collections import defaultdict
 
+# --- Optional model wrapper import (no circular deps) ---
+try:
+    from Spotter_AI import chat_text, detect_intent, build_messages  # generator
+except Exception:
+    chat_text = None
+    detect_intent = None
+    build_messages = None
+
 # =========================
-# CORE 1 — Knowledge Base (sample; supply --kb to use your own)
+# CORE 1 — Knowledge Base (sample; call init_kb(--kb) to use your own)
 # =========================
 SAMPLE_DOCS = [
     {
@@ -25,10 +43,10 @@ SAMPLE_DOCS = [
         "type": "exercise",
         "title": "Barbell Bench Press",
         "text": (
-                "Barbell Bench Press (Primary: chest; Secondary: triceps, anterior delts). "
-                "Cues: retract/depress scapula, slight arch, feet planted, bar path to lower chest, wrists over elbows. "
-                "Common mistakes: elbows flared >75°, bouncing bar, losing upper-back tension. "
-                "Progressions: pause bench; Regressions: dumbbell floor press."
+            "Barbell Bench Press (Primary: chest; Secondary: triceps, anterior delts). "
+            "Cues: retract/depress scapula, slight arch, feet planted, bar path to lower chest, wrists over elbows. "
+            "Common mistakes: elbows flared >75°, bouncing bar, losing upper-back tension. "
+            "Progressions: pause bench; Regressions: dumbbell floor press."
         ),
         "metadata": {"muscles":["chest","triceps"], "equipment":"barbell", "level":"intermediate", "source_id":"kb://exercises/bench"}
     },
@@ -97,7 +115,8 @@ def load_kb(jsonl_path: Optional[str]) -> List[Document]:
 # CORE 2 — Chunking + Metadata
 # =========================
 def normalize_text(t: str) -> str:
-    t = re.sub(r"\s+", " ", t).strip()
+    import re as _re
+    t = _re.sub(r"\\s+", " ", t).strip()
     return t
 
 def chunk_docs(docs: List[Document], chunk_size: int = 420, overlap: int = 60) -> List[Chunk]:
@@ -124,12 +143,13 @@ def chunk_docs(docs: List[Document], chunk_size: int = 420, overlap: int = 60) -
 # =========================
 # CORE 3 — Hybrid Retrieval (FAISS + BM25) + metadata pre-filter
 # =========================
-from sentence_transformers import SentenceTransformer
+from sentence_transformers import SentenceTransformer, CrossEncoder
 import numpy as np
 import faiss
 from rank_bm25 import BM25Okapi
 
 EMB_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+RERANKER = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
 _emb_model = None
 _faiss = None
@@ -137,9 +157,11 @@ _chunk_embs = None
 _bm25 = None
 _tokenized_corpus = None
 _chunks: List[Chunk] = []
+_reranker = None
+_INDEX_READY = False
 
 def build_indexes(chunks: List[Chunk]):
-    global _emb_model, _faiss, _chunk_embs, _bm25, _tokenized_corpus, _chunks
+    global _emb_model, _faiss, _chunk_embs, _bm25, _tokenized_corpus, _chunks, _reranker, _INDEX_READY
     _chunks = chunks
     _emb_model = SentenceTransformer(EMB_MODEL)
     texts = [c.text for c in chunks]
@@ -149,6 +171,13 @@ def build_indexes(chunks: List[Chunk]):
     _faiss.add(_chunk_embs)
     _tokenized_corpus = [t.lower().split() for t in texts]
     _bm25 = BM25Okapi(_tokenized_corpus)
+    _reranker = CrossEncoder(RERANKER)
+    _INDEX_READY = True
+
+def init_kb(kb_path: Optional[str] = None, *, chunk_size: int = 420, overlap: int = 60):
+    docs = load_kb(kb_path)
+    chunks = chunk_docs(docs, chunk_size=chunk_size, overlap=overlap)
+    build_indexes(chunks)
 
 def rr_fusion(list1: List[int], list2: List[int], k: int = 60) -> List[int]:
     scores: Dict[int, float] = defaultdict(float)
@@ -156,7 +185,6 @@ def rr_fusion(list1: List[int], list2: List[int], k: int = 60) -> List[int]:
     for r, i in enumerate(list2): scores[i] += 1.0/(k+r+1)
     return [i for i,_ in sorted(scores.items(), key=lambda x: x[1], reverse=True)]
 
-# ---- NEW: parse light metadata filters from query ----
 def parse_profile_from_query(q: str) -> Dict[str, Any]:
     t = q.lower()
     equip = []
@@ -171,42 +199,42 @@ def parse_profile_from_query(q: str) -> Dict[str, Any]:
         if d in t:
             day = d.replace(" ", "")
             break
-    m = re.search(r"(\d{2,3})\s*(?:min|minutes?)", t)
+    m = re.search(r"(\\d{2,3})\\s*(?:min|minutes?)", t)
     duration_min = int(m.group(1)) if m else None
     return {"equipment": set(equip), "goal": goal, "day": day, "duration_min": duration_min}
 
 def metadata_match(idx: int, prefs: Dict[str,Any]) -> bool:
     md = _chunks[idx].metadata
-    # Equipment: if specified, prefer matching; allow pass if doc has no equipment tag
-    if prefs["equipment"]:
+    if prefs.get("equipment"):
         eq = md.get("equipment")
         if eq and eq not in prefs["equipment"]:
             return False
-    if prefs["goal"]:
+    if prefs.get("goal"):
         if md.get("goal") and md.get("goal") != prefs["goal"]:
             return False
-    if prefs["day"]:
+    if prefs.get("day"):
         if md.get("day") and md.get("day") != prefs["day"]:
             return False
-    # duration is advisory; we don't hard-filter on it
     return True
 
 def retrieval_params(query: str) -> Tuple[int,int,int]:
     L = len(query.split())
-    if L < 6:     return 24, 24, 12   # short/ambiguous → fetch more
+    if L < 6:     return 24, 24, 12
     if L < 12:    return 16, 16, 10
     return 12, 12, 10
 
-def hybrid_candidates(query: str, prefs: Dict[str,Any]):
+def hybrid_candidates(query: str, prefs: Dict[str,Any] | None = None):
+    global _INDEX_READY
+    if not _INDEX_READY:
+        init_kb(None)  # build from SAMPLE_DOCS by default
+    prefs = prefs or {}
     top_vec, top_kw, pool = retrieval_params(query)
     q_emb = _emb_model.encode([query], convert_to_numpy=True, normalize_embeddings=True)[0]
-    sims, ids = _faiss.search(np.expand_dims(q_emb, 0), top_vec)
+    sims, ids = _faiss.search(__import__("numpy").expand_dims(q_emb, 0), top_vec)
     vec_ids = ids[0].tolist()
     kw_scores = _bm25.get_scores(query.lower().split())
-    kw_ids = list(np.argsort(kw_scores)[::-1][:top_kw])
+    kw_ids = list(__import__("numpy").argsort(kw_scores)[::-1][:top_kw])
     merged = rr_fusion(vec_ids, kw_ids, k=60)
-
-    # Metadata filter (soft): if it wipes out everything, fall back to unfiltered
     filtered = [i for i in merged if metadata_match(i, prefs)]
     cand_ids = filtered if filtered else merged
     return cand_ids[:max(pool, top_vec, top_kw)], q_emb, kw_scores
@@ -214,35 +242,26 @@ def hybrid_candidates(query: str, prefs: Dict[str,Any]):
 # =========================
 # CORE 4 — Cross-Encoder Reranker
 # =========================
-from sentence_transformers import CrossEncoder
-RERANKER = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-_reranker = None
-def ensure_reranker():
-    global _reranker
-    if _reranker is None:
-        _reranker = CrossEncoder(RERANKER)
-
 def rerank(query: str, cand_ids: List[int], keep_top: int = 5, pool_extra: int = 10) -> List[Dict[str,Any]]:
-    ensure_reranker()
-    # score a slightly larger pool before trimming
     pairs = [(query, _chunks[i].text) for i in cand_ids[:max(keep_top+pool_extra, len(cand_ids))]]
-    scores = _reranker.predict(pairs).tolist()
+    scores = __import__("numpy").asarray(_reranker.predict(pairs)).tolist()
     ranked = sorted(zip(cand_ids[:len(pairs)], scores), key=lambda x: x[1], reverse=True)
     out = []
     for i, sc in ranked[:keep_top]:
+        c = _chunks[i]
         out.append({
             "idx": i,
-            "chunk_id": _chunks[i].id,
-            "parent_id": _chunks[i].parent_id,
-            "text": _chunks[i].text,
-            "title": _chunks[i].metadata.get("title"),
-            "type": _chunks[i].metadata.get("type"),
+            "chunk_id": c.id,
+            "parent_id": c.parent_id,
+            "text": c.text,
+            "title": c.metadata.get("title"),
+            "type": c.metadata.get("type"),
             "rerank_score": float(sc)
         })
     return out
 
 # =========================
-# CORE 5 — Confidence Meter (same formula)
+# CORE 5 — Confidence Meter
 # =========================
 def softmax(xs):
     if not xs: return []
@@ -256,7 +275,7 @@ def compute_confidence(reranked: List[Dict[str,Any]], kw_scores, q_emb, k: int =
     cosims, bm25_flag = [], 0
     for h in top:
         emb = _chunk_embs[h["idx"]]
-        cos = float(np.dot(q_emb, emb))
+        cos = float(__import__("numpy").dot(q_emb, emb))
         h["cos_sim"] = cos
         h["bm25_score"] = float(kw_scores[h["idx"]])
         cosims.append(cos)
@@ -277,7 +296,7 @@ def conf_bucket(c: float) -> str:
     return "low"
 
 # =========================
-# CORE 6 — Prompt (“spec”) + Generation (Qwen if available)
+# CORE 6 — Prompt (“spec”) + Generation
 # =========================
 SYS_RULES = (
     "You are GymBot, a helpful fitness assistant.\n"
@@ -287,81 +306,26 @@ SYS_RULES = (
     "Write concise, actionable guidance (bullets OK)."
 )
 
-def build_messages(user_query: str, contexts: List[Dict[str,Any]]) -> List[Dict[str,str]]:
-    ctx = "\n\n".join([f"[{c['chunk_id']}] {c['text']}" for c in contexts])
-    user = (
-        f"User question: {user_query}\n\n"
-        f"Context:\n{ctx}\n\n"
+def _format_with_context(user_query: str, top_chunks: list[dict]) -> str:
+    ctx = "\\n\\n".join(f"[{c['chunk_id']}] {c['text']}" for c in top_chunks)
+    return (
+        f"User question: {user_query}\\n\\n"
+        f"Context:\\n{ctx}\\n\\n"
         f"Now answer the user. If information is missing, say so briefly."
     )
-    return [{"role":"system","content":SYS_RULES},{"role":"user","content":user}]
 
-# Optional: auto-use your Qwen chat if available
-_QWEN_CHAT = None
-try:
-    from Spotter_AI import chat_text as _QWEN_CHAT  # your file
-except Exception:
-    pass
+if build_messages is None:
+    def build_messages(system: str, user: str) -> list[dict]:
+        return [{"role":"system","content":system},{"role":"user","content":user}]
 
-from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline, set_seed
-_GEN = None
-def ensure_generator(model_name="Qwen/Qwen2.5-1.5B-Instruct"):
-    global _GEN
-    if _GEN is not None or _QWEN_CHAT is not None: return
-    try:
-        tok = AutoTokenizer.from_pretrained(model_name)
-        lm = AutoModelForCausalLM.from_pretrained(model_name, torch_dtype="auto", device_map="auto")
-        _GEN = pipeline("text-generation", model=lm, tokenizer=tok, max_new_tokens=400)
-    except Exception:
-        _GEN = None
-
-def detect_intent(q: str) -> str:
-    t = q.lower()
-    if any(k in t for k in ["injury","pain","hurts","impingement","sprain","strain"]): return "safety"
-    if any(k in t for k in ["plan","program","template","make me a","session","routine","workout"]): return "plan"
-    if any(k in t for k in ["motivate","pep talk","caption","slogan"]): return "creative"
-    return "knowledge"
-
-def sampling_params(intent: str, confidence: float) -> Dict[str,Any]:
-    if intent in {"knowledge","safety"}: return dict(do_sample=False)
-    if confidence < 0.55:              return dict(do_sample=False)
-    if intent == "plan":               return dict(do_sample=True, temperature=0.3, top_p=0.9, repetition_penalty=1.05)
-    if intent == "creative":           return dict(do_sample=True, temperature=0.7, top_p=0.95, repetition_penalty=1.05)
-    return dict(do_sample=True, temperature=0.2, top_p=0.9, repetition_penalty=1.05)
-
-def generate_answer(user_query: str, contexts: List[Dict[str,Any]], intent: str, confidence: float) -> str:
-    params = sampling_params(intent, confidence)
-    if _QWEN_CHAT is not None:
-        msgs = build_messages(user_query, contexts)
-        return _QWEN_CHAT(
-            msgs,
-            max_new_tokens=400,
-            do_sample=params.get("do_sample", False),
-            temperature=params.get("temperature", 0.0),
-            top_p=params.get("top_p", 1.0),
-        )
-    ensure_generator()
-    if _GEN is None:
-        # Show grounded prompt so you can paste into any model manually
-        ctx_preview = build_messages(user_query, contexts)
-        return "(Generator unavailable — grounded prompt follows)\n\n" + json.dumps(ctx_preview, indent=2)
-    set_seed(42)
-    prompt = SYS_RULES + "\n\nUser: " + build_messages(user_query, contexts)[1]["content"]
-    if params["do_sample"]:
-        out = _GEN(prompt, do_sample=True, temperature=params["temperature"], top_p=params["top_p"],
-                   repetition_penalty=params.get("repetition_penalty", 1.0))[0]["generated_text"]
-    else:
-        out = _GEN(prompt, do_sample=False)[0]["generated_text"]
-    return out[len(prompt):].strip()
-
-# ---- Injury detection: force-include safety note if present ----
 def injury_flag(q: str) -> bool:
     t = q.lower()
-    return any(k in t for k in ["injury","pain","hurt","impingement","strain","sprain","tendonitis","back pain","shoulder pain"])
+    return any(k in t for k in ["injury","pain","hurt","impingement","strain","sprain","tendonitis","tendinitis","back pain","shoulder pain","knee pain"])
 
 def get_safety_chunk() -> Optional[Dict[str,Any]]:
     for i, c in enumerate(_chunks):
-        if c.metadata.get("type") == "policy" or "safety" in c.metadata.get("title","").lower():
+        title = str(c.metadata.get("title","")).lower()
+        if c.metadata.get("type") == "policy" or "safety" in title:
             return {
                 "idx": i,
                 "chunk_id": c.id,
@@ -373,59 +337,49 @@ def get_safety_chunk() -> Optional[Dict[str,Any]]:
             }
     return None
 
-# =========================
-# End-to-end RAG
-# =========================
-def rag_answer(user_query: str, top_k: int = 5) -> Dict[str,Any]:
-    prefs = parse_profile_from_query(user_query)
-    cand_ids, q_emb, kw_scores = hybrid_candidates(user_query, prefs)
-    reranked = rerank(user_query, cand_ids, keep_top=top_k, pool_extra=10)
+# --- Public entrypoint ---
+def generate_grounded_answer(plain_user_query: str, top_k: int = 5, seed: int | None = None, kb_path: Optional[str] = None) -> dict:
+    """
+    Run cores 1–6 and return an answer grounded on your KB.
+    If kb_path is provided on first call, we load and build indexes from it.
+    """
+    global _INDEX_READY
+    if not _INDEX_READY:
+        init_kb(kb_path)
 
-    # Force include safety note for injury queries
-    if injury_flag(user_query):
+    prefs = parse_profile_from_query(plain_user_query)
+    cand_ids, q_emb, kw_scores = hybrid_candidates(plain_user_query, prefs)
+    reranked = rerank(plain_user_query, cand_ids, keep_top=top_k)
+
+    if injury_flag(plain_user_query):
         safety = get_safety_chunk()
         if safety and all(safety["chunk_id"] != c["chunk_id"] for c in reranked):
             reranked = [safety] + reranked[:-1] if len(reranked) >= top_k else [safety] + reranked
 
     confidence, breakdown = compute_confidence(reranked, kw_scores, q_emb, k=min(top_k, len(reranked)))
-    intent = detect_intent(user_query)
-    answer = generate_answer(user_query, reranked, intent=intent, confidence=confidence)
+    bucket = conf_bucket(confidence)
+
+    user_block = _format_with_context(plain_user_query, reranked)
+    messages = build_messages(SYS_RULES, user_block)
+
+    if chat_text is None or detect_intent is None:
+        return {
+            "answer": "(Generator unavailable — grounded prompt follows)\\n\\n" + user_block,
+            "intent": "knowledge",
+            "confidence": confidence,
+            "confidence_bucket": bucket,
+            "confidence_breakdown": breakdown,
+            "contexts": [{"id": c["chunk_id"], "title": c.get("title"), "type": c.get("type")} for c in reranked],
+        }
+
+    intent = detect_intent(plain_user_query)
+    answer = chat_text(messages, intent=intent, confidence=confidence, seed=seed)
 
     return {
         "answer": answer,
         "intent": intent,
         "confidence": confidence,
-        "confidence_bucket": conf_bucket(confidence),
+        "confidence_bucket": bucket,
         "confidence_breakdown": breakdown,
-        "contexts": [{"id": c["chunk_id"], "title": c["title"], "type": c["type"]} for c in reranked]
+        "contexts": [{"id": c["chunk_id"], "title": c.get("title"), "type": c.get("type")} for c in reranked],
     }
-
-# =========================
-# CLI
-# =========================
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--kb", type=str, default=None, help="Path to KB JSONL (id,type,title,text,metadata)")
-    parser.add_argument("--query", type=str, required=True, help="User query")
-    args = parser.parse_args()
-
-    docs = load_kb(args.kb)
-    chunks = chunk_docs(docs, chunk_size=420, overlap=60)
-    build_indexes(chunks)
-
-    res = rag_answer(args.query)
-
-    print("\n=== CONFIDENCE ===")
-    print(f"{res['confidence']:.2f}  ({res['confidence_bucket']})")
-    print(res["confidence_breakdown"])
-
-    print("\n=== CONTEXTS ===")
-    for c in res["contexts"]:
-        print(c)
-
-    print("\n=== ANSWER ===")
-    print(res["answer"])
-
-if __name__ == "__main__":
-    import numpy as np
-    main()
