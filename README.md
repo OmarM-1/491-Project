@@ -14,7 +14,7 @@ source .venv/bin/activate
 
 python -m pip install --upgrade pip
 
-pip install transformers accelerate pillow huggingface_hub torch torchvision
+pip install transformers accelerate pillow huggingface_hub torch torchvision faiss-cpu sentence-transformers rank-bm25
 
 AFTER, run the model in which itll start downloading all the model weights (no training required) itll be about 30gb +-5
 It should be able to run on all our device but this is just a small scale model, to utilize a better one we need to move it to a cloud computing service. 
