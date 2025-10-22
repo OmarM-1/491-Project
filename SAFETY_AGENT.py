@@ -1,6 +1,7 @@
 #SAFETY-GATE-AGENT
 import re 
 from typing import Tuple, Callable
+from Spotter_AI import chat_text
 
 FLAG = [
     r"chest pain| tight(ness)?| pressure| squeezing| discomfort",
