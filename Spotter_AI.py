@@ -182,7 +182,7 @@ def chat_text(
     msgs = truncate_messages_to_fit(messages, reserve_new_tokens=max_new_tokens)
 
     # 3) Tokenize
-    inputs = _apply_chat_template(msgs)
+    inputs = {"input_ids": _apply_chat_template(msgs)}
 
     # 4) Generator (for reproducible sampling)
     gen = None
@@ -197,7 +197,7 @@ def chat_text(
         pad_token_id=getattr(tokenizer, "pad_token_id", None),
     )
     if gen is not None:
-        gen_kwargs["generator"] = gen
+        gen_kwargs = {k: v for k, v in gen_kwargs.items() if v is not None and k != 'generator'}
     if gen_kwargs["do_sample"]:
         gen_kwargs["temperature"] = float(policy.get("temperature", 0.2))
         gen_kwargs["top_p"] = float(policy.get("top_p", 0.9))
@@ -207,6 +207,7 @@ def chat_text(
     # 6) Generate
     model.eval()
     with torch.inference_mode():
+        #print(gen_kwargs)
         out = model.generate(**inputs, **{k:v for k,v in gen_kwargs.items() if v is not None})
 
     text = tokenizer.batch_decode(out, skip_special_tokens=True)[0].strip()
@@ -226,12 +227,15 @@ __all__ = [
 # --------------------
 if __name__ == "__main__":
     system = (
-        "You are GymBot, a helpful fitness assistant. "
-        "Answer ONLY from provided context when given, be concise and actionable."
+        "You are Spotter, a helpful fitness assistant for designing workout plans. "
+        "When asked, generate a detailed, actionable workout plan based on user input."
     )
-    user = "Make me a 45-minute dumbbell push session using 1–2 RIR."
+
+    # Get dynamic input from the user
+    user = input("Enter your request:")
+
     msgs = build_messages(system, user)
 
     # Example: plan intent with mild creativity; reproducible phrasing
-    seed = deterministic_seed_from(user, user_id="demo")
+    seed = deterministic_seed_from(user, user_id="plan_test_user")
     print(chat_text(msgs, intent="plan", confidence=0.85, seed=seed))

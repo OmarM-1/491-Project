@@ -1,0 +1,102 @@
+[
+    {
+      "id": "intro_1",
+      "type": "introduction",
+      "title": "Who are you?",
+      "description": "You are Spotter AI, a helpful fitness chatbot. You provide accurate and concise information on exercises, nutrition, and general fitness topics to assist users in achieving their health and fitness goals. Help the user stay on topic and do not make up facts"
+    },
+    {
+      "id": "intro_2",
+      "type": "introduction",
+      "title": "What can you do?",
+      "description": "You can answer questions about various exercises, nutrition advice, and general fitness tips. You can provide detailed explanations of exercise techniques, nutritional guidelines, and workout plans."
+    },
+    {
+      "id": "intro_3",
+      "type": "introduction",
+      "title": "How should you respond?",
+      "description": "Provide clear, concise, and accurate information. Use simple language that is easy to understand. When answering questions, ensure that your responses are relevant to the user's query and avoid unnecessary details."
+    },
+    {
+      "id": "intro_4",
+      "type": "introduction",
+      "title": "What should you avoid?",
+      "description": "Avoid providing medical advice or diagnosing health conditions. Do not share personal opinions or unverified information. Stay focused on fitness-related topics and refrain from discussing unrelated subjects."
+    },
+    {
+      "id": "intro_5",
+      "type": "introduction",
+      "title": "What can you respond to?",
+      "description": "You can only respond to various exercises, nutrition advice, and general fitness tips within reason. Gently guide the conversation back to fitness if query does not align with fitness."
+    }
+    {
+      "id": "exercise_1",
+      "type": "exercise",
+      "title": "Dumbbell Bench Press",
+      "category": "Strength Training",
+      "description": "A chest exercise that targets the pectorals. Lie on a bench, holding dumbbells with elbows bent at 90 degrees. Press the dumbbells up and lower them slowly.",
+      "muscles_worked": ["Chest", "Triceps", "Shoulders"],
+      "difficulty": "Intermediate",
+      "sets_reps": "3–4 sets of 8–12 reps"
+    },
+    {
+      "id": "exercise_2",
+      "type": "exercise",
+      "title": "Overhead Press",
+      "category": "Strength Training",
+      "description": "A shoulder exercise that targets the deltoids. Hold dumbbells at shoulder height and press them overhead until arms are fully extended.",
+      "muscles_worked": ["Shoulders", "Triceps", "Upper Chest"],
+      "difficulty": "Intermediate",
+      "sets_reps": "3–4 sets of 8–10 reps"
+    },
+    {
+      "id": "exercise_3",
+      "type": "exercise",
+      "title": "Squats",
+      "category": "Strength Training",
+      "description": "A compound movement that targets the legs and glutes. Stand with feet shoulder-width apart, bend your knees to lower your body, and then return to the standing position.",
+      "muscles_worked": ["Quadriceps", "Hamstrings", "Glutes"],
+      "difficulty": "Beginner",
+      "sets_reps": "3–5 sets of 8–12 reps"
+    },
+    {
+      "id": "nutrition_1",
+      "type": "nutrition",
+      "title": "Protein Requirements for Muscle Growth",
+      "description": "Protein is essential for muscle repair and growth. The recommended intake is 1.2–2.2 grams of protein per kilogram of body weight, depending on your training intensity and goals.",
+      "sources": ["Chicken", "Eggs", "Fish", "Tofu", "Lentils"]
+    },
+    {
+      "id": "nutrition_2",
+      "type": "nutrition",
+      "title": "Healthy Carbohydrates",
+      "description": "Carbohydrates are a primary energy source for high-intensity workouts. Complex carbs, like whole grains and vegetables, should be prioritized over refined sugars.",
+      "sources": ["Brown rice", "Sweet potatoes", "Oats", "Quinoa", "Whole wheat bread"]
+    },
+    {
+      "id": "qa_1",
+      "type": "Q&A",
+      "question": "What is the best exercise for weight loss?",
+      "answer": "The best exercises for weight loss combine cardiovascular training with strength exercises. High-Intensity Interval Training (HIIT) and compound lifts like squats and deadlifts are effective choices."
+    },
+    {
+      "id": "qa_2",
+      "type": "Q&A",
+      "question": "How many calories should I eat to build muscle?",
+      "answer": "To build muscle, you need to be in a caloric surplus. Aim for about 250–500 extra calories per day, focusing on protein-rich foods and balanced meals."
+    },
+    {
+      "id": "qa_3",
+      "type": "Q&A",
+      "question": "What should I eat after a workout?",
+      "answer": "After a workout, consume a meal with both protein (for muscle repair) and carbohydrates (to replenish glycogen). A protein shake with a banana or grilled chicken with quinoa is a good option."
+    },
+    {
+      "id": "qa_4",
+      "type": "Q&A",
+      "question": "How do I get rid of belly fat?",
+      "answer": "To lose belly fat, you need to be in a caloric deficit by consuming fewer calories than you burn. Combine a healthy diet with regular cardio and strength training."
+    }
+    
+  ]
+  
