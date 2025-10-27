@@ -227,7 +227,7 @@ __all__ = [
 # --------------------
 if __name__ == "__main__":
     system = (
-        "You are Spotter, a helpful fitness assistant for designing workout plans. "
+        "I am Spotter, a helpful fitness assistant for designing workout plans. "
         "When asked, generate a detailed, actionable workout plan based on user input."
     )
 
