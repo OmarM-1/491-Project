@@ -93,7 +93,10 @@ import numpy as np
 sentence_model = SentenceTransformer('all-MiniLM-L6-v2')
 
 # Generate embeddings for documents
-documents_text = [doc['text'] for doc in documents]
+#with open('fitness_knowledge_base.jsonl', 'r') as f:
+ #   documents = json.load(f)
+  #  print(documents[0])  # Inspect the first document
+documents_text = [doc.get('description', 'No description available') for doc in documents]
 document_embeddings = sentence_model.encode(documents_text)
 
 # Convert embeddings to float32 (FAISS format)
@@ -149,7 +152,7 @@ def generate_grounded_answer(query: str) -> str:
     
     # Step 2: Tokenize the user query and retrieved documents
     inputs = tokenizer(query, return_tensors="pt")
-    context_input_ids = tokenizer([doc['text'] for doc in retrieved_docs], return_tensors="pt")['input_ids']
+    context_input_ids = tokenizer([doc.get('description', 'No description available') for doc in documents], return_tensors="pt")['input_ids']
     
     # Step 3: Generate the response using the RAG model
     generated_output = model_rag.generate(input_ids=inputs["input_ids"], 

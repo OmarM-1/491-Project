@@ -28,7 +28,7 @@
       "type": "introduction",
       "title": "What can you respond to?",
       "description": "You can only respond to various exercises, nutrition advice, and general fitness tips within reason. Gently guide the conversation back to fitness if query does not align with fitness."
-    }
+    },
     {
       "id": "exercise_1",
       "type": "exercise",
