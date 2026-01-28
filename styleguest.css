@@ -14,13 +14,29 @@ body {
     font-family: 'Arial', sans-serif;
     }
 
+.header {
+    position: relative;
+    z-index: 1000;
+    }
 
+
+/* Positions new SpotterAI logo on top left */
 .logo {
     position: fixed;
     top: 53px;
     left: 106px;
     font-size: 22px;
     font-weight: 600;
+    border: none;
+    text-decoration: none;
+    margin: 0px 20px 0px 0px;
+    color: rgb(255, 255, 255);
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.logo:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
 }
 
 .home-page {
