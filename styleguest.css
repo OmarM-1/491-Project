@@ -149,9 +149,9 @@ body {
 }
 
 #send-button:hover {
-    background-color: #303030;
-    transform: scale(1.1);
-    box-shadow: 0 6px 14px rgba(0,0,0,0.25);
+  background-color: #303030;
+  transform: scale(1.1);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.25);
 }
 
 #send-button img {
@@ -160,6 +160,36 @@ body {
   object-fit: contain;
   filter: invert(1);
 }
+
+.chat-window {
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: transparent;
+  }
+
+.chat-message {
+    margin-bottom: 0.5rem;
+    width: 100%;
+}
+
+.chat-message.user {
+    text-align: right;
+    font-weight: 600;
+  }
+
+.chat-message.bot {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.chat-message.bot > * {
+    text-align: left;
+    max-width: 70%;
+}
+
 
 @keyframes pageFadeUp {
   0% {
