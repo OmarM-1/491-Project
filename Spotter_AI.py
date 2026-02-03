@@ -210,7 +210,10 @@ def chat_text(
         #print(gen_kwargs)
         out = model.generate(**inputs, **{k:v for k,v in gen_kwargs.items() if v is not None})
 
-    text = tokenizer.batch_decode(out, skip_special_tokens=True)[0].strip()
+    # Decode only the NEW tokens (exclude the input prompt)
+    input_length = inputs["input_ids"].shape[1]
+    generated_tokens = out[:, input_length:]
+    text = tokenizer.batch_decode(generated_tokens, skip_special_tokens=True)[0].strip()
     return text
 
 # Public API
@@ -226,16 +229,10 @@ __all__ = [
 # Quick manual test
 # --------------------
 if __name__ == "__main__":
-    system = (
-        "I am Spotter, a helpful fitness assistant for designing workout plans. "
-        "When asked, generate a detailed, actionable workout plan based on user input."
-    )
+    print("Spotter AI - LLM Backend")
+    print(f"Model: {MODEL_NAME}")
+    print(f"Device: {DEVICE_MAP}")
+    print(f"4-bit: {LOAD_IN_4BIT}")
+    print("\nUse this module by importing:")
+    print("  from Spotter_AI import chat_text, build_messages")
 
-    # Get dynamic input from the user
-    user = input("Enter your request:")
-
-    msgs = build_messages(system, user)
-
-    # Example: plan intent with mild creativity; reproducible phrasing
-    seed = deterministic_seed_from(user, user_id="plan_test_user")
-    print(chat_text(msgs, intent="plan", confidence=0.85, seed=seed))

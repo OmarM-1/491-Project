@@ -403,40 +403,11 @@ def generate_grounded_answer(query: str) -> str:
 # Performance Test
 # =========================
 if __name__ == "__main__":
-    import time
-    
-    print("Testing optimized RAG performance...")
-    
-    # First query (includes initialization)
-    start = time.time()
+    print("Initializing optimized RAG system...")
     rag = get_rag()
-    init_time = time.time() - start
-    print(f"\n✅ Initialization: {init_time:.2f}s")
-    
-    # Test query
-    query = "What are the benefits of dumbbell bench press?"
-    
-    start = time.time()
-    docs, conf = rag.retrieve(query, k=6)
-    retrieve_time = time.time() - start
-    print(f"✅ Retrieval: {retrieve_time:.2f}s")
-    print(f"   Found {len(docs)} docs, confidence: {conf:.2f}")
-    
-    # Second query (should be instant)
-    start = time.time()
-    docs2, conf2 = rag.retrieve("How do I build strong glutes?", k=6)
-    retrieve_time2 = time.time() - start
-    print(f"✅ Second retrieval: {retrieve_time2:.2f}s (should be <0.1s!)")
-    
-    print("\n" + "="*60)
-    if init_time < 30 and retrieve_time < 1.0 and retrieve_time2 < 0.2:
-        print("✅ PERFORMANCE GOOD!")
-    else:
-        print("⚠️  PERFORMANCE ISSUES DETECTED")
-        if init_time > 30:
-            print(f"   - Initialization too slow: {init_time:.2f}s")
-        if retrieve_time > 1.0:
-            print(f"   - First retrieval too slow: {retrieve_time:.2f}s")
-        if retrieve_time2 > 0.2:
-            print(f"   - Second retrieval too slow: {retrieve_time2:.2f}s")
-    print("="*60)
+    print("✅ RAG system ready!")
+    print("\nUse this module by importing:")
+    print("  from optimized_rag import generate_grounded_answer")
+    print("  answer = generate_grounded_answer('your question')")
+    print("\nNote: FAISS index is cached for instant startup next time!")
+

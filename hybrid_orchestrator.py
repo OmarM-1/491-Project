@@ -426,22 +426,4 @@ def interactive_mode():
 # Main
 # =========================
 if __name__ == "__main__":
-    import sys
-    
-    if len(sys.argv) > 1 and sys.argv[1] == 'interactive':
-        interactive_mode()
-    else:
-        # Quick test
-        test_queries = [
-           c
-        ]
-        
-        print("Testing hybrid routing...\n")
-        
-        for query in test_queries:
-            print("="*60)
-            analyze_query(query)
-            print()
-        
-        print("\nTo test with actual answers, run:")
-        print("  python hybrid_orchestrator.py interactive")
+    interactive_mode()
