@@ -72,31 +72,8 @@
       "title": "Healthy Carbohydrates",
       "description": "Carbohydrates are a primary energy source for high-intensity workouts. Complex carbs, like whole grains and vegetables, should be prioritized over refined sugars.",
       "sources": ["Brown rice", "Sweet potatoes", "Oats", "Quinoa", "Whole wheat bread"]
-    },
-    {
-      "id": "qa_1",
-      "type": "Q&A",
-      "question": "What is the best exercise for weight loss?",
-      "answer": "The best exercises for weight loss combine cardiovascular training with strength exercises. High-Intensity Interval Training (HIIT) and compound lifts like squats and deadlifts are effective choices."
-    },
-    {
-      "id": "qa_2",
-      "type": "Q&A",
-      "question": "How many calories should I eat to build muscle?",
-      "answer": "To build muscle, you need to be in a caloric surplus. Aim for about 250–500 extra calories per day, focusing on protein-rich foods and balanced meals."
-    },
-    {
-      "id": "qa_3",
-      "type": "Q&A",
-      "question": "What should I eat after a workout?",
-      "answer": "After a workout, consume a meal with both protein (for muscle repair) and carbohydrates (to replenish glycogen). A protein shake with a banana or grilled chicken with quinoa is a good option."
-    },
-    {
-      "id": "qa_4",
-      "type": "Q&A",
-      "question": "How do I get rid of belly fat?",
-      "answer": "To lose belly fat, you need to be in a caloric deficit by consuming fewer calories than you burn. Combine a healthy diet with regular cardio and strength training."
     }
+   
     
   ]
   
