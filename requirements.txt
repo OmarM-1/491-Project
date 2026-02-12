@@ -12,13 +12,12 @@ faiss-cpu>=1.7.4  # Use faiss-gpu if you have CUDA
 numpy>=1.24.0
 
 # Cross-encoder for reranking
-cross-encoder>=0.1.0
-
 # Quantization (optional, for 4-bit models)
 bitsandbytes>=0.41.0
 
 # Dataset handling
 datasets>=2.14.0
+rank-bm25
 
 # Optional: Fine-tuning
 # peft>=0.5.0
