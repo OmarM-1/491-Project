@@ -1,0 +1,231 @@
+# ====================
+# GymBot Project
+# ====================
+
+# Mac OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+
+# Pickle files (security risk - we use FAISS native instead)
+*.pkl
+*.pickle
+
+# FAISS cache files (regenerate on each machine)
+.cache_faiss_*
+*.index
+*.faiss
+
+# Model files (too large for git - download separately)
+models/
+*.bin
+*.safetensors
+*.gguf
+*.pt
+*.pth
+
+# Data files (can be large)
+*.jsonl
+*.csv
+*.parquet
+fitness_knowledge_base.jsonl
+conversational_dataset.csv
+
+# ====================
+# Python
+# ====================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+conda_env/
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# pyenv
+.python-version
+
+# Environments
+.env
+.env.local
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# ====================
+# IDEs
+# ====================
+
+# VSCode
+.vscode/
+*.code-workspace
+.history/
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Spyder
+.spyderproject
+.spyproject
+
+# Sublime Text
+*.sublime-project
+*.sublime-workspace
+
+# Vim
+*.swp
+*.swo
+*~
+
+# ====================
+# ML / AI specific
+# ====================
+
+# Hugging Face cache
+.cache/
+huggingface/
+transformers_cache/
+
+# Weights & Biases
+wandb/
+
+# TensorBoard
+runs/
+logs/
+tensorboard/
+
+# Checkpoints
+checkpoints/
+*.ckpt
+
+# ====================
+# System / Temp
+# ====================
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.out
+*.bak
+*.swp
+*~
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# ====================
+# Project specific
+# ====================
+
+# User data (keep private)
+user_data/
+uploads/
+
+# Test outputs
+test_output/
+demo_output/
+
+# Database files (if any)
+*.db
+*.sqlite
+*.sqlite3
+
+# Large media files
+*.mp4
+*.avi
+*.mov
+*.mkv
+
+# Compressed files (unless needed)
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Documentation builds
+docs/_build/
+docs/.doctrees/
+
+# ====================
+# Security
+# ====================
+
+# API keys and secrets
+secrets.json
+credentials.json
+*.pem
+*.key
+.env.secret
+
+# SSL certificates
+*.crt
+*.cer
+*.der
+!fitness_knowledge_base.jsonl
+!conversational_dataset.csv

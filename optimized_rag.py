@@ -137,8 +137,7 @@ def get_cache_path(kb_path: str) -> str:
     """Generate cache filename based on KB hash"""
     with open(kb_path, 'rb') as f:
         kb_hash = hashlib.md5(f.read()).hexdigest()[:8]
-    # CHANGED: use FAISS native .index file
-    return f'.cache_faiss_{kb_hash}.index'
+    return f'.cache_faiss_{kb_hash}.pkl'
 
 def build_faiss_index(chunks: List[Chunk], embedder: SentenceTransformer, cache_path: str):
     """Build FAISS index with caching (faiss.read_index / write_index)"""
