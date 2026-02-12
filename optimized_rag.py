@@ -11,7 +11,6 @@ Key optimizations:
 
 import os
 import json
-import pickle
 import hashlib
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
@@ -180,7 +179,7 @@ def get_cache_path(kb_path: str) -> str:
     """Generate cache filename based on KB hash"""
     with open(kb_path, 'rb') as f:
         kb_hash = hashlib.md5(f.read()).hexdigest()[:8]
-    return f'.cache_faiss_{kb_hash}.pkl'
+    return f'.cache_faiss_{kb_hash}.index'
 
 def build_faiss_index(chunks: List[Chunk], embedder: SentenceTransformer, cache_path: str):
     """Build FAISS index with caching"""
@@ -190,8 +189,7 @@ def build_faiss_index(chunks: List[Chunk], embedder: SentenceTransformer, cache_
     if os.path.exists(cache_path):
         print(f"Loading FAISS index from cache: {cache_path}")
         try:
-            with open(cache_path, 'rb') as f:
-                _FAISS_INDEX = pickle.load(f)
+            _FAISS_INDEX = faiss.read_index(cache_path)
             print("✅ FAISS index loaded from cache (instant!)")
             return
         except Exception as e:
@@ -216,8 +214,7 @@ def build_faiss_index(chunks: List[Chunk], embedder: SentenceTransformer, cache_
     
     # Save to cache
     try:
-        with open(cache_path, 'wb') as f:
-            pickle.dump(_FAISS_INDEX, f)
+        faiss.write_index(_FAISS_INDEX, cache_path)
         print(f"✅ FAISS index cached to: {cache_path}")
     except Exception as e:
         print(f"Warning: Could not cache index: {e}")
