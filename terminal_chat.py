@@ -1,9 +1,9 @@
 import requests
 
-URL = "http://127.0.0.1:8000/chat"
+URL = "http://127.0.0.1:8001/chat"
 
 def run():
-    print("RAG + Calorie Agent (type 'exit' to quit)\n")
+    print("Calorie Chat (type 'exit' to quit)\n")
     while True:
         msg = input("You: ").strip()
         if msg.lower() in {"exit", "quit"}:
@@ -19,3 +19,4 @@ def run():
 
 if __name__ == "__main__":
     run()
+
