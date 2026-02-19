@@ -180,14 +180,14 @@ body {
     font-weight: 600;
   }
 
-.chat-message.bot {
-    display: flex;
-    justify-content: flex-start;
+.chat-message.assistant {
+  display: flex;
+  justify-content: flex-start;
 }
 
-.chat-message.bot > * {
-    text-align: left;
-    max-width: 70%;
+.chat-message.assistant > * {
+  text-align: left;
+  max-width: 70%;
 }
 
 
