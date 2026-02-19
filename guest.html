@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spotter AI - Guest</title>
+  <link rel="stylesheet" href="styleguest.css" />
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons"
+        rel="stylesheet">
+</head>
+
+<body class="home-page">
+  <header class="header">
+    <a href="index.html" class="logo">SpotterAI</a>
+  </header>
+
+  <main class="page">
+    <section class="hero">
+      <h1>(Guest) SpotterAI</h1>
+      <p>Ask a question about training or nutrition.</p>
+
+      <!-- CHAT MESSAGES AREA -->
+      <div id="chat-window" class="chat-window">
+        <!-- Messages will be appended here by JS -->
+      </div>
+
+      <!-- INPUT AREA -->
+      <div class="chat-input-wrapper">
+        <textarea
+          class="chat-input"
+          id="chat-input"
+          placeholder="Ask a question..."
+          rows="1"
+        ></textarea>
+        <button id="send-button" aria-label="Send">
+          <img src="up-arrow-icon.webp" alt="Send">
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const textarea = document.getElementById('chat-input');
+    const sendButton = document.getElementById('send-button');
+    const chatWindow = document.getElementById('chat-window');
+
+    // Auto-resize textarea
+    textarea.addEventListener('input', () => {
+      textarea.style.height = 'auto';
+      textarea.style.height = textarea.scrollHeight + 'px';
+    });
+
+    // Send on button click
+    sendButton.addEventListener('click', () => {
+      handleSend();
+    });
+
+    // Send on Enter (Shift+Enter gives new line)
+    textarea.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    });
+
+    function appendMessage(role, text) {
+      const msg = document.createElement('div');
+      msg.classList.add('chat-message', role); // role: 'user' or 'assistant'
+      msg.textContent = text;
+      chatWindow.appendChild(msg);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    async function handleSend() {
+      const question = textarea.value.trim();
+      if (!question) return;
+
+      // Show user message
+      appendMessage('user', question);
+      textarea.value = '';
+      textarea.style.height = 'auto';
+
+      // Show a temporary "thinking..." message
+      const loadingMsg = document.createElement('div');
+      loadingMsg.classList.add('chat-message', 'assistant');
+      loadingMsg.textContent = 'Thinking...';
+      chatWindow.appendChild(loadingMsg);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+
+      // ---- Placeholder AI call (front-end only) ----
+      // Later we'll replace this with a real fetch to your Python API.
+      try {
+        const replyText = await fakeAiReply(question);
+
+        loadingMsg.remove();
+        appendMessage('assistant', replyText);
+      } catch (err) {
+        loadingMsg.textContent = 'Error getting reply. Please try again.';
+      }
+    }
+
+    // Temporary fake AI – replace with real Python API later
+    async function fakeAiReply(question) {
+      // Here you can make this smarter if you want
+      return "Guest mode reply: I received your question – create a free account to unlock saving workouts and history.";
+    }
+  </script>
+</body>
+</html>
