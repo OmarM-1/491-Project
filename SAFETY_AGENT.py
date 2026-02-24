@@ -28,4 +28,8 @@ def safety_gate_agent(user_input: str, chat: Callable) -> Tuple[bool, str]:
         response = chat(messages, max_tokens=100, temperature=0).strip()[-6:].upper()
         if "UNSAFE" in response:
             return (False, "I might not be able to help with that. If you are experiencing a medical emergency, please seek immediate medical attention or call emergency services. I can help with all else once you are cleared of any issue. Take care!")
+<<<<<<< HEAD
     return (True, "")
+=======
+    return (True, "")
+>>>>>>> 380e9e4524810277600acd74c7b90bbbe3505971
