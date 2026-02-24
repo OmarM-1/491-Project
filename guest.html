@@ -102,12 +102,18 @@
       }
     }
 
-    async function callBackend(question) {
+async function callBackend(question) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 120000); // 120s
+
   const res = await fetch("http://127.0.0.1:8000/api/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message: question })
+    body: JSON.stringify({ message: question }),
+    signal: controller.signal
   });
+
+  clearTimeout(timeout);
 
   if (!res.ok) throw new Error("Bad response");
   const data = await res.json();
