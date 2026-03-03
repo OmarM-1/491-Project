@@ -72,38 +72,45 @@
       chatWindow.scrollTop = chatWindow.scrollHeight;
     }
 
+    const API_URL = 'http://localhost:8000';
+
     async function handleSend() {
       const question = textarea.value.trim();
       if (!question) return;
 
-      // Show user message
       appendMessage('user', question);
       textarea.value = '';
       textarea.style.height = 'auto';
 
-      // Show a temporary "thinking..." message
       const loadingMsg = document.createElement('div');
       loadingMsg.classList.add('chat-message', 'assistant');
       loadingMsg.textContent = 'Thinking...';
       chatWindow.appendChild(loadingMsg);
       chatWindow.scrollTop = chatWindow.scrollHeight;
 
-      // ---- Placeholder AI call (front-end only) ----
-      // Later we'll replace this with a real fetch to your Python API.
       try {
-        const replyText = await fakeAiReply(question);
+        const fd = new FormData();
+        fd.append('message', question);
 
+        const res = await fetch(`${API_URL}/chat`, {
+          method: 'POST',
+          body: fd,
+        });
+
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+        const data = await res.json();
         loadingMsg.remove();
-        appendMessage('assistant', replyText);
-      } catch (err) {
-        loadingMsg.textContent = 'Error getting reply. Please try again.';
-      }
-    }
 
-    // Temporary fake AI – replace with real Python API later
-    async function fakeAiReply(question) {
-      // Here you can make this smarter if you want
-      return "Guest mode reply: I received your question – create a free account to unlock saving workouts and history.";
+        if (data.error) {
+          appendMessage('assistant', `Error: ${data.error}`);
+        } else {
+          appendMessage('assistant', data.answer);
+        }
+
+      } catch (err) {
+        loadingMsg.textContent = `Connection error — is the API running? (${err.message})`;
+      }
     }
   </script>
 </body>
