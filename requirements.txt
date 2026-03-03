@@ -38,3 +38,4 @@ datasets>=2.14.0
 # For CUDA 11.8: torch==2.1.0+cu118
 # For CUDA 12.1: torch==2.1.0+cu121
 #pip install opencv-python
+#pip install fastapi uvicorn python-multipart
