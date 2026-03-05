@@ -207,14 +207,43 @@ class HybridOrchestrator:
         ok, warning = safety_gate_agent(query)
 
         if not ok:
+            from Spotter_AI import build_messages, chat_text
+            import hashlib
+
+            system = (
+                "You are Spotter AI. The user's query triggered a safety block.\n"
+                "You must refuse to answer the request.\n"
+                "Do not give medical advice, diagnosis, treatment steps, or drug instructions.\n"
+                "Give a brief refusal and suggest appropriate next steps (urgent care/emergency services if needed).\n"
+                "Keep it under 5 sentences and be calm and supportive."
+            )
+
+            user = f"User query:\n{query}\n\nWrite the refusal response now."
+
+            messages = build_messages(system, user)
+
+            # Optional: makes refusal stable per identical input; remove seed for more variation.
+            seed = int(hashlib.sha256(query.encode()).hexdigest(), 16) % (2**31 - 1)
+
+            refusal = chat_text(
+                messages,
+                max_new_tokens=160,
+                intent="safety",
+                confidence=1.0,
+                seed=seed,
+                do_sample=True,
+                temperature=0.35,
+                top_p=0.9,
+                repetition_penalty=1.05,
+            )
             if return_metadata:
                 return {
-                    'answer': warning,
+                    'answer': refusal,
                     'system': 'safety',
                     'safe': False,
                     'route_reason': 'safety check failed'
                 }
-            return warning
+            return refusal
 
         # Route
         system, reason = self._route(query)

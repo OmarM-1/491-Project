@@ -16,13 +16,6 @@ FLAG = [
 
 SAFE_RULES = re.compile("|".join(FLAG), re.IGNORECASE)
 
-WARNING_MSG = (
-    "I might not be able to help with that. Your message includes symptoms or terms that could indicate a "
-    "medical emergency or dangerous substance use. If you or someone else is experiencing these symptoms, "
-    "please seek immediate medical attention or call emergency services. "
-    "If you're safe and not in immediate danger, tell me more and I can help with general information."
-)
-
 def safety_gate_agent(
     user_input: str,
     chat: Optional[Callable[[List[Dict[str, Any]]], str]] = None,
@@ -38,7 +31,7 @@ def safety_gate_agent(
 
     # If no LLM, block on regex match (recommended for now)
     if chat is None:
-        return False, WARNING_MSG
+        return False, ""
 
     # Optional: second-pass with LLM (only if you actually have a chat function)
     try:
@@ -48,9 +41,9 @@ def safety_gate_agent(
         ]
         resp = chat(messages).strip().upper()
         if "UNSAFE" in resp:
-            return False, WARNING_MSG
+            return False, ""
     except Exception:
         # If LLM fails, be conservative when regex flagged
-        return False, WARNING_MSG
+        return False, ""
 
     return True, ""
