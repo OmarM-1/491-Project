@@ -204,10 +204,7 @@ class HybridOrchestrator:
             answer string or dict with metadata
         """
         # Safety check
-        ok, warning = safety_gate_agent(
-            query,
-            chat=lambda msgs, **kw: chat_text(msgs, intent="safety", confidence=0.0, seed=0)
-        )
+        ok, warning = safety_gate_agent(query)
 
         if not ok:
             if return_metadata:
