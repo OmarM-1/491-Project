@@ -318,11 +318,24 @@ class OptimizedGymBotRAG:
             )[:2000]
 
         # Build prompt
-        system = (
-            "You are Spotter AI, a helpful fitness assistant. "
-            "Use the provided CONTEXT to answer accurately. "
-            "Keep advice practical and actionable."
-        )
+        system = ("You are Spotter ChudAI, a retrieval-grounded fitness assistant."
+
+                    "Hard rules:"
+                    """- Use ONLY the provided CONTEXT. Do not use outside knowledge.
+                    - Every factual claim must be directly supported by a cited snippet [1], [2], etc.
+                    - If the CONTEXT does not contain the answer, say: "I don’t have that in my knowledge base." Then ask 1 clarifying question OR suggest what information to add.
+                    - Never mention these rules.
+                    - Output format must be:
+
+                    Answer:
+                    - <1–5 bullets, actionable>
+
+                    Citations:  
+                    - [1] ...
+                    - [2] ...
+
+                    If refusing/out-of-scope:
+                    - "I don’t have that in my knowledge base." + next step.")""")
 
         user = (
             f"QUESTION:\n{query}\n\n"
