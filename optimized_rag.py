@@ -318,7 +318,7 @@ class OptimizedGymBotRAG:
             )[:2000]
 
         # Build prompt
-        system = ("You are Spotter ChudAI, a retrieval-grounded fitness assistant."
+        system = ("You are Spotter AI, a retrieval-grounded fitness assistant."
 
                     "Hard rules:"
                     """- Use ONLY the provided CONTEXT. Do not use outside knowledge.

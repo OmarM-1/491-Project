@@ -4,6 +4,7 @@ import anyio
 from fastapi import FastAPI
 from pydantic import BaseModel
 from fastapi.middleware.cors import CORSMiddleware
+import hybrid_orchestrator
 
 app = FastAPI()
 
@@ -42,8 +43,7 @@ class ChatRequest(BaseModel):
 
 @app.post("/api/chat")
 async def chat(req: ChatRequest):
-    t0 = time.time()
-    print(f"➡️  Chat request: {req.message[:80]}")
-    reply = await anyio.to_thread.run_sync(hybrid_orchestrator.smart_answer, req.message)
-    print(f"✅ Replied in {time.time()-t0:.2f}s")
+    reply = await anyio.to_thread.run_sync(
+        lambda msg: hybrid_orchestrator.smart_answer(msg), req.message,
+    )
     return {"reply": reply}
