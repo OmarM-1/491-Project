@@ -18,6 +18,7 @@ Changes made (only):
 
 import os
 import json
+import csv
 import hashlib
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
@@ -80,12 +81,15 @@ def get_reranker() -> CrossEncoder:
 # =========================
 # Data Loading
 # =========================
-def load_kb(json_path: str = 'fitness_knowledge_base.jsonl') -> List[Document]:
-    """Load knowledge base"""
+def load_kb(
+        json_path: str = 'fitness_knowledge_base.jsonl',
+        csv_path: str = 'conversational_dataset.csv'
+) -> List[Document]:
+    docs: List[Document] = []
+
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
 
-    docs = []
     for obj in data:
         docs.append(Document(
             id=obj["id"],
@@ -95,6 +99,24 @@ def load_kb(json_path: str = 'fitness_knowledge_base.jsonl') -> List[Document]:
             metadata={k: v for k, v in obj.items()
                      if k not in ["id", "type", "title", "description"]}
         ))
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)  # columns: Question, Answer
+        for i, row in enumerate(reader):
+            q = row.get("Question", "").strip()
+            a = row.get("Answer", "").strip()
+            if not q or not a:
+                continue
+
+            docs.append(
+                Document(
+                    id=f"qa_{i}",
+                    type="qa",
+                    title=q[:80],
+                    text=f"Question: {q}\nAnswer: {a}",
+                    metadata={"source": "csv_qa"},
+                )
+            )
+
     return docs
 
 def chunk_docs(docs: List[Document], chunk_size: int = 400, overlap: int = 50) -> List[Chunk]:
@@ -320,6 +342,9 @@ class OptimizedGymBotRAG:
         # Build prompt
         system = ("You are Spotter AI, a retrieval-grounded fitness assistant."
 
+                    "Your goal is to provide accurate and helpful answers to user queries by leveraging the retrieved context."
+                    "You answer in the same tone and style as the following examples: "
+                    "short, encouraging, specific exercise plans, and clear sets/reps, remaining RIR recommended(Reps in Reserve), and RPE (Rate of Perceived Exertion)"
                     "Hard rules:"
                     """- Use ONLY the provided CONTEXT. Do not use outside knowledge.
                     - Every factual claim must be directly supported by a cited snippet [1], [2], etc.
