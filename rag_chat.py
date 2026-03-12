@@ -1,25 +1,50 @@
+# rag_chat.py
 # Terminal Chat service
 # Run: python -m uvicorn rag_chat:app --reload --port 8001
 
 import re
-from typing import Literal
+from typing import Literal, Optional, Dict, Any
 
 import requests
 from fastapi import FastAPI
 from pydantic import BaseModel
-from safety_agent import safety_gate_agent
+from safety_agent import safety_gate_agent  
+from diet import DietAgent
 
 app = FastAPI(
     title="Terminal Chat",
-    description="Routes calorie questions to Calorie Agent. No KB/RAG.",
-    version="1.0.0",
+    description="Routes calorie questions to Calorie Agent, then optionally provides diet suggestions.",
+    version="2.0.0",
 )
+
+# ----------------------------
+# Simple session memory
+# ----------------------------
+SESSION: Dict[str, Dict[str, Any]] = {}
+diet_agent = DietAgent()
+
+def get_session(session_id: str) -> Dict[str, Any]:
+    if session_id not in SESSION:
+        SESSION[session_id] = {}
+    return SESSION[session_id]
+
 
 # ----------------------------
 # Intent routing + parsing
 # ----------------------------
-def route_intent(text: str) -> Literal["calorie_calc", "other"]:
-    t = text.lower()
+Route = Literal["calorie_calc", "diet_followup", "other"]
+
+def route_intent(text: str, session: Dict[str, Any]) -> Route:
+    t = text.lower().strip()
+
+    
+    if session.get("awaiting_diet_opt_in"):
+        if t in {"yes", "y", "yeah", "yep", "sure", "ok", "okay"}:
+            return "diet_followup"
+        if t in {"no", "n", "nope", "nah"}:
+            return "other"
+        
+        return "diet_followup"
 
     looks_like_stats = (
         bool(re.search(r"\b(male|female)\b", t))
@@ -85,6 +110,13 @@ def parse_height_weight_age_sex(text: str):
     elif "active" in t:
         activity_level = "active"
 
+    # goal (optional)
+    goal = "maintain"
+    if "lose" in t or "cut" in t or "fat loss" in t:
+        goal = "lose"
+    elif "gain" in t or "bulk" in t or "muscle" in t:
+        goal = "gain"
+
     return {
         "sex": sex,
         "age": age,
@@ -94,7 +126,7 @@ def parse_height_weight_age_sex(text: str):
         "weight_lb": weight_lb,
         "activity_level": activity_level,
         "body_fat_percent": None,
-        "goal": "maintain",
+        "goal": goal,
         "weekly_rate_kg": None,
         "weekly_rate_lb": None,
     }
@@ -105,6 +137,7 @@ def parse_height_weight_age_sex(text: str):
 # ----------------------------
 class ChatIn(BaseModel):
     message: str
+    session_id: str = "default"  # client can pass unique ID per user
 
 class ChatOut(BaseModel):
     route: str
@@ -124,17 +157,82 @@ def call_calorie_agent(extracted: dict) -> dict:
 
 @app.post("/chat", response_model=ChatOut)
 def chat(payload: ChatIn):
+    session = get_session(payload.session_id)
+
     is_safe, warning = safety_gate_agent(payload.message)
     if not is_safe:
-        return ChatOut(route="safety_block", answer = warning)
-    route = route_intent(payload.message)
+        return ChatOut(route="safety_block", answer=warning)
 
+    route = route_intent(payload.message, session)
+
+    # ----------------------------
+    # Diet follow-up flow
+    # ----------------------------
+    if route == "diet_followup":
+        # If user said "no"
+        if payload.message.lower().strip() in {"no", "n", "nope", "nah"}:
+            session["awaiting_diet_opt_in"] = False
+            return ChatOut(route="diet_followup", answer="No problem — want workout suggestions next?")
+
+        # If user says yes but we don’t have a calorie result stored, fallback
+        last = session.get("last_calorie_result")
+        last_extracted = session.get("last_extracted")
+        if not last or not last_extracted:
+            session["awaiting_diet_opt_in"] = False
+            return ChatOut(
+                route="diet_followup",
+                answer="I can do that — first tell me your sex, age, height, weight, and activity level so I can compute your calorie target.",
+            )
+
+        session["awaiting_diet_opt_in"] = False
+
+        # Pick the most relevant target based on goal
+        goal = last_extracted.get("goal", "maintain")
+        suggestions = last.get("suggestions", {})
+        if goal == "lose":
+            # default to moderate cut (you can change this)
+            target = suggestions.get("cut_moderate_-0.5kg_wk", last["maintain_calories"])
+        elif goal == "gain":
+            target = suggestions.get("gain_slow_+0.25kg_wk", last["maintain_calories"])
+        else:
+            target = last["maintain_calories"]
+
+        # We need weight_kg for protein target; calorie_agent normalized but doesn't return weight.
+        # Use extracted weight (kg or convert from lb).
+        weight_kg = last_extracted.get("weight_kg")
+        if weight_kg is None and last_extracted.get("weight_lb") is not None:
+            weight_kg = last_extracted["weight_lb"] * 0.45359237
+
+        if weight_kg is None:
+            weight_kg = 75.0  # safe fallback; better than crashing
+
+        diet = diet_agent.suggest(goal=goal, target_calories=int(target), weight_kg=float(weight_kg))
+
+        answer = (
+            f"Diet suggestions for goal **{goal}**:\n"
+            f"- Target calories: **{diet['target_calories']} kcal/day**\n"
+            f"- Macros (approx): **P {diet['protein_g']}g / C {diet['carbs_g']}g / F {diet['fat_g']}g**\n\n"
+            f"Guidelines:\n- " + "\n- ".join(diet["guidelines"]) + "\n\n"
+            f"Simple meal templates:\n- " + "\n- ".join(diet["meal_templates"]) + "\n\n"
+            f"Snack ideas:\n- " + "\n- ".join(diet["snack_options"])
+        )
+        return ChatOut(route="diet_followup", answer=answer)
+
+    # ----------------------------
+    # Default / other
+    # ----------------------------
     if route == "other":
+        # If we were awaiting yes/no, keep prompting clearly
+        if session.get("awaiting_diet_opt_in"):
+            return ChatOut(route="diet_followup", answer="Just reply yes/no — do you want diet suggestions?")
         return ChatOut(
             route=route,
-            answer="I can only help with calorie/BMR/TDEE calculations right now. Tell me your sex, age, height, weight, and activity level."
+            answer="Tell me your sex, age, height, weight, and activity level (and say lose/maintain/gain). Example: 'male 25 5'10 175 lb moderate I want to lose weight'."
         )
 
+    # ----------------------------
+    # Calorie flow
+    # ----------------------------
     extracted = parse_height_weight_age_sex(payload.message)
 
     # Basic validation before calling the calorie agent
@@ -143,18 +241,25 @@ def chat(payload: ChatIn):
     if not (extracted.get("sex") and extracted.get("age") and has_height and has_weight):
         return ChatOut(
             route=route,
-            answer="I need your age, sex, height, and weight. Example: 'male 25 5'10 175 lb moderate'."
+            answer="I need your age, sex, height, and weight. Example: 'male 25 5'10 175 lb moderate lose'."
         )
 
     try:
         result = call_calorie_agent(extracted)
+
+        # Save state for next message
+        session["last_calorie_result"] = result
+        session["last_extracted"] = extracted
+        session["awaiting_diet_opt_in"] = True
+
         return ChatOut(
             route=route,
             answer=(
                 f"BMR: {result['bmr']}\n"
                 f"TDEE: {result['tdee']}\n"
                 f"Maintain: {result['maintain_calories']}\n"
-                f"Notes: {result['notes']}"
+                f"Notes: {result['notes']}\n\n"
+                f"Do you want diet suggestions based on this? (yes/no)"
             ),
         )
     except Exception:

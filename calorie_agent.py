@@ -3,7 +3,7 @@
 # License: MIT
 #
 # Run locally:
-#   python -m uvicorn main:app --reload
+#   python -m uvicorn calorie_agent:app --reload
 #
 # Interactive docs:
 #   http://127.0.0.1:8000/docs
@@ -163,6 +163,8 @@ def calculate(payload: CalculateInput):
     maintain = round(tdee)
 
     suggestions = {
+        # let us split this up into gain, lose, maintain for easy read for the user.
+        # How are we calculating the loss, what reference are we using.
         "maintain": maintain,
         "cut_mild_-0.25kg_wk": max(1200, round(maintain - kcal_for_kg_fat(0.25) / 7.0)),
         "cut_moderate_-0.5kg_wk": max(1200, round(maintain - kcal_for_kg_fat(0.5) / 7.0)),
