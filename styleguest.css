@@ -1,0 +1,203 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    color : white;
+  background: radial-gradient(circle at top, #282a2c 0, #000000 55%);
+    min-height: 100vh;
+    display: block;
+    place-items: center;
+    margin: 0;
+    font-family: 'Arial', sans-serif;
+    }
+
+.header {
+    position: relative;
+    z-index: 1000;
+    }
+
+
+/* Positions new SpotterAI logo on top left */
+.logo {
+    position: fixed;
+    top: 53px;
+    left: 106px;
+    font-size: 22px;
+    font-weight: 600;
+    border: none;
+    text-decoration: none;
+    margin: 0px 20px 0px 0px;
+    color: rgb(255, 255, 255);
+    cursor: pointer;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+.logo:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+}
+
+.home-page {
+    background-color: black;
+    opacity: 1;
+}
+
+/* Page content container fades text up */
+.page {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    padding: 0 7vw;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    animation: pageFadeUp 1s ease-out forwards 1s;
+}
+.hero {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+}
+
+.hero h1{
+    font-size: clamp(2.5rem, 4vw, 3.5rem);
+    margin-bottom: 0.8rem;
+    text-align: center;
+}
+
+.hero p{
+    font-size: 1.05rem;
+    text-align: center;    
+    max-width: 26rem;
+    line-height: 1.5;
+    color: #e5e7eb;
+    margin-bottom: 1.5rem;
+}
+
+.text-box{
+    border: none;
+    margin: 0px 20px 0px 0px;
+    padding: 12px 24px;
+    border-radius: 1000px;
+    background: linear-gradient(135deg, #2c2c2c 0%, #575757 100%);
+    color: rgb(255, 255, 255);
+    font-weight: 600;
+    font-size: 1rem;
+    cursor: pointer;
+    box-shadow: 0 0px 25px rgba(170, 170, 170, 0.4);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.chat-input-wrapper {
+  width: 100%;
+  position: relative;
+  display: flex;
+  gap: px;
+  max-width: 900px;
+  padding: 12px;
+}
+
+.chat-input {
+  width: 100%;
+  min-height: 52px;
+  max-height: 200px;
+  width: 100%;
+  flex: 1;
+  overflow: hidden;
+  padding: 14px 16px;
+  border-radius: 50px;
+  border: 1px solid #2a2a2a;
+  background-color: #1c1c1c;
+  color: #f5f5f5;
+  font-size: 16px;
+  line-height: 1.4;
+  outline: none;
+  transition: border 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Placeholder */
+.chat-input::placeholder {
+  color: #3a3a3a;
+}
+
+/* Focus ring */
+.chat-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
+}
+
+#send-button {
+  width: 48px;                /* diameter of the circle */
+  height: 48px;      
+  margin: 2px;         /* diameter of the circle */
+  border-radius: 50%;         /* makes it a circle */
+  border: none;               /* remove default button border */
+  background-color: #7c7c7c;  /* button color, change as needed */
+  display: flex;              /* center the icon */
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;                 /* no extra padding */
+  box-shadow: 0 4px 10px rgba(0,0,0,0.2); /* optional shadow */
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+#send-button:hover {
+  background-color: #303030;
+  transform: scale(1.1);
+  box-shadow: 0 6px 14px rgba(0,0,0,0.25);
+}
+
+#send-button img {
+  width: 20px;
+  height: 20px;
+  object-fit: contain;
+  filter: invert(1);
+}
+
+.chat-window {
+  max-height: 60vh;
+  overflow-y: auto;
+  margin-bottom: 1rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  background: transparent;
+  }
+
+.chat-message {
+    margin-bottom: 0.5rem;
+    width: 100%;
+}
+
+.chat-message.user {
+    text-align: right;
+    font-weight: 600;
+  }
+
+.chat-message.bot {
+    display: flex;
+    justify-content: flex-start;
+}
+
+.chat-message.bot > * {
+    text-align: left;
+    max-width: 70%;
+}
+
+
+@keyframes pageFadeUp {
+  0% {
+    opacity: 0;
+    transform: translateY(26px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
