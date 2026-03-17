@@ -110,4 +110,9 @@ class DietAgent:
             guidelines=guidelines,
             meal_templates=meal_templates,
             snack_options=snack_options,
+<<<<<<< Updated upstream
         ).__dict__
+=======
+        ).__dict__
+
+>>>>>>> Stashed changes
