@@ -13,6 +13,7 @@ import re
 import os
 from SAFETY_AGENT import safety_gate_agent
 from Spotter_AI import chat_text
+from nutrition import call_calorie_agent, format_calorie_response, call_diet_agent
 
 # Import both RAG systems
 try:
@@ -28,6 +29,20 @@ try:
 except ImportError:
     AGENTIC_RAG_AVAILABLE = False
     print("⚠️  Agentic RAG not available")
+
+# =========================
+# Nutrition Intent Detection
+# =========================
+CALORIE_KEYWORDS = re.compile(
+    r"\b(calorie|calories|tdee|bmr|maintenance|bulk|cut|deficit|surplus)\b",
+    re.IGNORECASE,
+)
+
+DIET_KEYWORDS = re.compile(
+    r"\b(meal plan|diet|macros?|protein|carbs?|fats?|nutrition)\b",
+    re.IGNORECASE,
+)
+
 
 # =========================
 # Query Complexity Scorer
@@ -203,6 +218,7 @@ class HybridOrchestrator:
         Returns:
             answer string or dict with metadata
         """
+
         # Safety check
         ok, warning = safety_gate_agent(query)
 
@@ -244,6 +260,60 @@ class HybridOrchestrator:
                     'route_reason': 'safety check failed'
                 }
             return refusal
+        
+        # ----- Nutrition Routing ----------------------
+
+        q_lower = query.lower()
+        def _extract_nutrition_params(text: str) -> Dict[str, Any]:
+            # TODO: Implement a proper parser
+            return {
+                "sex": "male",
+                "age": 25,
+                "height_cm": 178.0,
+                "weight_kg": 80.0,
+                "activity_level": "moderate",
+                "goal": "maintain",
+            }
+        # ----- Calorie Agent Path -----
+        if CALORIE_KEYWORDS.search(q_lower):
+            params = _extract_nutrition_params(query)
+            try:
+                raw = call_calorie_agent(**params)
+                answer_txt = format_calorie_response(raw)
+                if return_metadata:
+                    return {
+                        'answer': answer_txt,
+                        'system': 'calorie_agent',
+                        'safe': True,
+                        'route_reason': 'calorie-related query'
+                    }
+                return answer_txt
+            except Exception as e:
+                print(f"❌ Error calling Calorie Agent: {str(e)} - falling back to RAG")
+
+        # ---- Diet Agent Path -----
+        if DIET_KEYWORDS.search(q_lower):
+            params = _extract_nutrition_params(query)
+            try:
+                goal = params.get("goal", "maintain")
+                weight_kg = params["weight_kg"]
+                target_calories = 2400 # later: derive from calorie agent
+                answer_txt = call_diet_agent(
+                    goal=goal,
+                    weight_kg=weight_kg,
+                    target_calories=target_calories,
+                    dietary_style=None,
+                )
+                if return_metadata:
+                    return {
+                        'answer': answer_txt,
+                        'system': 'diet_agent',
+                        'safe': True,
+                        'route_reason': 'diet-related query'
+                    }
+                return answer_txt
+            except Exception as e:
+                print(f"❌ Error calling Diet Agent: {str(e)} - falling back to RAG")
 
         # Route
         system, reason = self._route(query)
