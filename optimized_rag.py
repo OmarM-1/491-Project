@@ -31,6 +31,23 @@ import faiss
 # NEW: Faster BM25
 from rank_bm25 import BM25Okapi  # requires: pip install rank-bm25
 
+from supabase import create_client, Client  # pip install supabase-py
+import os
+
+_SUPABASE_CLIENT: Optional[Client] = None
+
+
+def get_supabase() -> Client:
+    global _SUPABASE_CLIENT
+    if _SUPABASE_CLIENT is None:
+        url = os.environ.get("SUPABASE_URL")
+        key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY")
+        if not url or not key:
+            raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY env vars not set")
+        _SUPABASE_CLIENT = create_client(url, key)
+    return _SUPABASE_CLIENT
+
+
 # =========================
 # Global Singletons (CRITICAL for performance!)
 # =========================
@@ -200,125 +217,115 @@ def build_faiss_index(chunks: List[Chunk], embedder: SentenceTransformer, cache_
     except Exception as e:
         print(f"Warning: Could not cache index: {e}")
 
+# === Supabase vector retrieval ===
+
+def embed_query(query: str, embedder: SentenceTransformer) -> np.ndarray:
+    vec = embedder.encode([query])
+    vec = np.array(vec).astype("float32")[0]
+    return vec
+
+
+def retrieve_from_supabase(
+    query: str,
+    embedder: SentenceTransformer,
+    table: str = "documents",
+    match_count: int = 6,
+) -> List[Dict]:
+    """
+    Uses Supabase RPC or direct SQL to run pgvector similarity search.
+    You should create a Postgres function like match_documents() on Supabase.
+    """
+    supabase = get_supabase()
+    query_embedding = embed_query(query, embedder).tolist()
+
+    # Option A: using an RPC function you define on Supabase
+    # SQL example for that function is in Supabase pgvector docs/blog.
+    #   create function match_documents(query_embedding vector(1536), match_count int)
+    #   returns table(id uuid, content text, similarity float) ...
+    #
+    response = supabase.rpc(
+        "match_rag_documents",
+        {
+            "match_count": match_count,      
+            "match_threshold": 0.0,       
+            "match_user_id": None,     
+            "query_embedding": query_embedding,
+        },
+    ).execute()
+
+    rows = response.data or [] 
+    docs: List[Dict] = []
+    for i, row in enumerate(rows):
+        # Adapt keys to your function's return columns
+        text = row.get("content") or row.get("text") or ""
+        title = row.get("title") or f"doc_{i}"
+        score = float(row.get("similarity", 0.0))
+        docs.append(
+            {
+                "chunk_id": str(row.get("id", f"doc_{i}")),
+                "text": text,
+                "score": score,
+                "source": "supabase",
+                "metadata": {"title": title},
+            }
+        )
+    return docs
+
+
+
 # =========================
 # Optimized RAG System
 # =========================
 class OptimizedGymBotRAG:
-    """Performance-optimized RAG with caching and lazy loading"""
+    """RAG backed by Supabase pgvector instead of local FAISS/BM25."""
 
-    def __init__(self, kb_path: str = 'fitness_knowledge_base.jsonl', force_rebuild: bool = False):
-        global _CHUNKS, _BM25, _FAISS_INDEX, _BM25_TOKENIZED
+    def __init__(self, kb_path: str = "fitness_knowledge_base.jsonl", force_rebuild: bool = False):
+        print("\n🚀 Initializing Supabase-backed RAG System...")
 
-        print("\n🚀 Initializing Optimized RAG System...")
-
-        # Load data
-        print("Loading knowledge base...")
-        docs = load_kb(kb_path)
-        _CHUNKS = chunk_docs(docs)
-        print(f"✅ Loaded {len(docs)} docs → {len(_CHUNKS)} chunks")
-
-        # Lazy load models ONCE (but keep handles on self)
+        # Just load models; KB lives in Supabase now
         self.embedder = get_embedder()
         self.reranker = get_reranker()
 
-        # Build/load FAISS index with caching
-        cache_path = get_cache_path(kb_path)
-        if force_rebuild and os.path.exists(cache_path):
-            os.remove(cache_path)
-            print("Force rebuilding index...")
+        # Optional ping to Supabase
+        _ = get_supabase()
+        print("✅ Models loaded and Supabase client ready!\n")
 
-        build_faiss_index(_CHUNKS, self.embedder, cache_path)
-
-        # CHANGED: Build BM25 using rank_bm25 (fast)
-        print("Building BM25 index...")
-        chunk_texts = [c.text for c in _CHUNKS]
-        _BM25_TOKENIZED = [t.lower().split() for t in chunk_texts]
-        _BM25 = BM25Okapi(_BM25_TOKENIZED)
-
-        print("✅ RAG system ready!\n")
 
     def retrieve(self, query: str, k: int = 6) -> Tuple[List[Dict], float]:
         """
-        Hybrid retrieve + rerank
+        Retrieve documents using Supabase pgvector + CrossEncoder reranking.
         Returns: (docs, confidence)
         """
-        global _CHUNKS, _BM25, _FAISS_INDEX, _BM25_TOKENIZED
+        # 1) Vector similarity in Supabase
+        initial_docs = retrieve_from_supabase(
+            query=query,
+            embedder=self.embedder,
+            match_count=max(k * 3, 12),
+        )
 
-        if _CHUNKS is None or _BM25 is None or _FAISS_INDEX is None:
-            raise RuntimeError("RAG not initialized!")
-
-        # Use warm handles (no repeated get_* calls)
-        embedder = self.embedder
-        reranker = self.reranker
-
-        # 1) FAISS semantic search (cosine-like)
-        query_embedding = embedder.encode([query])
-        query_embedding = np.array(query_embedding).astype('float32')
-        faiss.normalize_L2(query_embedding)
-        faiss_scores, faiss_indices = _FAISS_INDEX.search(query_embedding, k * 2)
-
-        # 2) BM25 keyword search (fast)
-        q_tokens = query.lower().split()
-        bm25_scores = _BM25.get_scores(q_tokens)
-        top_bm25_idx = np.argsort(bm25_scores)[::-1][: (k * 2)]
-        bm25_results = [(int(i), float(bm25_scores[i])) for i in top_bm25_idx]
-
-        # 3) Merge results
-        seen = set()
-        merged = []
-
-        # Add FAISS results
-        for idx, score in zip(faiss_indices[0], faiss_scores[0]):
-            if idx < 0:
-                continue
-            if idx not in seen:
-                chunk = _CHUNKS[idx]
-                merged.append({
-                    'chunk_id': chunk.id,
-                    'text': chunk.text,
-                    'score': float(score),  # higher is better now (IP similarity)
-                    'source': 'faiss',
-                    'metadata': chunk.metadata
-                })
-                seen.add(idx)
-
-        # Add BM25 results
-        # normalize BM25 to a smaller range like before
-        for idx, score in bm25_results:
-            if idx not in seen:
-                chunk = _CHUNKS[idx]
-                merged.append({
-                    'chunk_id': chunk.id,
-                    'text': chunk.text,
-                    'score': float(score / 10.0),
-                    'source': 'bm25',
-                    'metadata': chunk.metadata
-                })
-                seen.add(idx)
-
-        if not merged:
+        if not initial_docs:
             return [], 0.0
 
-        # 4) Cross-encoder reranking (CAPPED candidates)
-        rerank_n = min(len(merged), max(20, k * 3))
-        candidates = merged[:rerank_n]
-        pairs = [[query, doc['text']] for doc in candidates]
-        scores = reranker.predict(pairs)
+        # 2) Cross-encoder rerank
+        candidates = initial_docs[: max(k * 3, len(initial_docs))]
+        pairs = [[query, d["text"]] for d in candidates]
+        scores = self.reranker.predict(pairs)
 
-        for doc, score in zip(candidates, scores):
-            doc['rerank_score'] = float(score)
+        for d, s in zip(candidates, scores):
+            d["rerank_score"] = float(s)
 
-        merged.sort(key=lambda x: x.get('rerank_score', 0), reverse=True)
-        top_docs = merged[:k]
+        candidates.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
+        top_docs = candidates[:k]
 
-        # 5) Calculate confidence
-        if top_docs and 'rerank_score' in top_docs[0]:
-            top_scores = [doc['rerank_score'] for doc in top_docs[:3] if 'rerank_score' in doc]
+        # 3) Confidence heuristic from top rerank scores
+        top_scores = [d["rerank_score"] for d in top_docs if "rerank_score" in d]
+        if top_scores:
             confidence = min(0.99, max(0.0, sum(top_scores) / max(1, len(top_scores))))
         else:
             confidence = 0.65
 
         return top_docs, float(confidence)
+
 
     def generate_grounded_answer(self, query: str, max_new_tokens: int = 400) -> str:
         """End-to-end generation with RAG"""
