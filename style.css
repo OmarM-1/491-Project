@@ -146,9 +146,6 @@ body {
     padding: 53px 106px 0;
 }
 
-.nav { outline: 2px solid red; }
-.nav-links { outline: 2px solid blue; }
-
 
 .nav-links {
     margin-left: auto;
