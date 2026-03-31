@@ -40,8 +40,8 @@ _SUPABASE_CLIENT: Optional[Client] = None
 def get_supabase() -> Client:
     global _SUPABASE_CLIENT
     if _SUPABASE_CLIENT is None:
-        url = os.environ.get("SUPABASE_URL")
-        key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY") or os.environ.get("SUPABASE_KEY")
+        url = "https://ezowjohfkxvaajeqilkx.supabase.co"
+        key = "sb_publishable__ajmqfcEBopf6B-aKLIzuw_XmyvssUq"
         if not url or not key:
             raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY env vars not set")
         _SUPABASE_CLIENT = create_client(url, key)
