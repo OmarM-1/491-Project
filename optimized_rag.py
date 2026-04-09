@@ -53,7 +53,6 @@ def get_supabase() -> Client:
 # =========================
 _EMBEDDER = None
 _RERANKER = None
-_FAISS_INDEX = None
 _CHUNKS = None
 _BM25 = None
 _BM25_TOKENIZED = None  # NEW: store tokenized corpus to use BM25Okapi
@@ -169,53 +168,6 @@ def chunk_docs(docs: List[Document], chunk_size: int = 400, overlap: int = 50) -
 
     return chunks
 
-# =========================
-# FAISS Index with Caching (FAISS native)
-# =========================
-def get_cache_path(kb_path: str) -> str:
-    """Generate cache filename based on KB hash"""
-    with open(kb_path, 'rb') as f:
-        kb_hash = hashlib.md5(f.read()).hexdigest()[:8]
-    return f'.cache_faiss_{kb_hash}.pkl'
-
-def build_faiss_index(chunks: List[Chunk], embedder: SentenceTransformer, cache_path: str):
-    """Build FAISS index with caching (faiss.read_index / write_index)"""
-    global _FAISS_INDEX
-
-    # Try to load from cache
-    if os.path.exists(cache_path):
-        print(f"Loading FAISS index from cache: {cache_path}")
-        try:
-            _FAISS_INDEX = faiss.read_index(cache_path)
-            print("✅ FAISS index loaded from cache (instant!)")
-            return
-        except Exception as e:
-            print(f"Cache load failed: {e}, rebuilding...")
-
-    # Build from scratch
-    print("Building FAISS index (first time only)...")
-    chunk_texts = [c.text for c in chunks]
-
-    # Batch encoding for speed
-    print(f"Encoding {len(chunk_texts)} chunks...")
-    embeddings = embedder.encode(
-        chunk_texts,
-        show_progress_bar=True,
-        batch_size=32
-    )
-    embeddings = np.array(embeddings).astype('float32')
-
-    # CHANGED: normalize + use Inner Product index (cosine-like)
-    faiss.normalize_L2(embeddings)
-    _FAISS_INDEX = faiss.IndexFlatIP(embeddings.shape[1])
-    _FAISS_INDEX.add(embeddings)
-
-    # Save to cache
-    try:
-        faiss.write_index(_FAISS_INDEX, cache_path)
-        print(f"✅ FAISS index cached to: {cache_path}")
-    except Exception as e:
-        print(f"Warning: Could not cache index: {e}")
 
 # === Supabase vector retrieval ===
 
@@ -277,7 +229,7 @@ def retrieve_from_supabase(
 # Optimized RAG System
 # =========================
 class OptimizedGymBotRAG:
-    """RAG backed by Supabase pgvector instead of local FAISS/BM25."""
+    """RAG backed by Supabase pgvector"""
 
     def __init__(self, kb_path: str = "fitness_knowledge_base.jsonl", force_rebuild: bool = False):
         print("\n🚀 Initializing Supabase-backed RAG System...")
