@@ -634,3 +634,114 @@ body {
     display: none;
   }
 }
+
+.signup-step { display: none; }
+.signup-step--active {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.step-actions{
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.sex-group{
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sex-label{
+  font-size: 0.95rem;
+  color: var(--text-soft);
+}
+
+.sex-options{
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.sex-option{
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.sex-option input{
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sex-option span{
+  display: inline-block;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+  color: var(--text-main);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: border 0.18s ease, background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.sex-option input:checked + span{
+  border-color: var(--accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+.goal-group{
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.goal-label{
+  font-size: 0.95rem;
+  color: var(--text-soft);
+}
+
+.goal-options{
+  display: flex;
+  flex-direction: column; /* vertical stack */
+  gap: 0.5rem;
+}
+
+.goal-option{
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.goal-option input{
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.goal-option span{
+  display: inline-block;
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: linear-gradient(180deg, var(--surface-2), var(--surface-1));
+  color: var(--text-main);
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: border 0.18s ease, background 0.18s ease,
+              color 0.18s ease, transform 0.18s ease;
+}
+
+.goal-option input:checked + span{
+  border-color: var(--accent);
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: #ffffff;
+  transform: translateY(-1px);
+}
