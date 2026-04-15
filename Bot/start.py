@@ -217,15 +217,9 @@ def build_app(hw_config: dict, db_status: dict, ai_status: dict):
 
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:3000",
-            "http://localhost:5173",
-            "http://127.0.0.1:5500",
-            "http://localhost:5500",
-        ],
+        allow_origins=["*"],
         allow_methods=["*"],
         allow_headers=["*"],
-        allow_credentials=True,
     )
 
     UPLOAD_DIR = Path(tempfile.mkdtemp(prefix="gymbot_"))

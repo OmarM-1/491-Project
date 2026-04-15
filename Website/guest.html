@@ -89,12 +89,10 @@
       chatWindow.scrollTop = chatWindow.scrollHeight;
 
       try {
-        const fd = new FormData();
-        fd.append('message', question);
-
         const res = await fetch(`${API_URL}/chat`, {
           method: 'POST',
-          body: fd,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: question }),
         });
 
         if (!res.ok) throw new Error(`Server error: ${res.status}`);
