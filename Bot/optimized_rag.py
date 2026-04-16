@@ -326,7 +326,14 @@ class OptimizedGymBotRAG:
         
         return top_docs, float(confidence)
     
-    def generate_grounded_answer(self, query: str, max_new_tokens: int = 1000) -> str:
+    def generate_grounded_answer(
+        self,
+        query: str,
+        max_new_tokens: int = 1000,
+        history: list = None,
+        thread_id: str = None,
+        user_id: str = None,
+    ) -> str:
         """End-to-end generation with RAG"""
         try:
             from Spotter_AI import chat_text, build_messages
@@ -356,8 +363,8 @@ class OptimizedGymBotRAG:
         # Build prompt
         system = (
             "You are Spotter AI, an expert fitness coach. "
-            "Give a greeting back and introduce yourself as Spotter AI when user sends a greeting. "
-            "When a CONTEXT is provided, ground your answer in it and cite sources with [1], [2], etc. "
+            "Give a greeting back and introduce yourself as Spotter AI when user sends a greeting such as hi, hello, hey, etc. "
+            "When a CONTEXT is provided, ground your answer in it "
             "When the context is missing or incomplete, answer using your fitness expertise — "
             "give specific, actionable advice with realistic numbers tailored to the user. "
             "Never invent medical diagnoses or claim supplements cure diseases. "
@@ -365,14 +372,28 @@ class OptimizedGymBotRAG:
             "Always end with a complete sentence — never stop mid-thought."
         )
 
+        # Build conversation memory block (sliding window)
+        memory_block = ""
+        if history or thread_id:
+            from memory_manager import build_context_block
+            memory_block = build_context_block(
+                thread_id=thread_id,
+                user_id=user_id,
+                history=history or [],
+            )
+
+        history_section = f"\n\n{memory_block}" if memory_block else ""
+
         if not docs:
             user = (
-                f"QUESTION:\n{query}\n\n"
+                f"QUESTION:\n{query}"
+                f"{history_section}\n\n"
                 f"No context was retrieved. Answer from your general fitness expertise."
             )
         else:
             user = (
-                f"QUESTION:\n{query}\n\n"
+                f"QUESTION:\n{query}"
+                f"{history_section}\n\n"
                 f"CONTEXT:\n{context}\n\n"
                 f"Use the context where relevant, cite with [1], [2], etc., "
                 f"and supplement with your expertise if the context is incomplete."
