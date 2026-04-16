@@ -277,8 +277,15 @@ class OptimizedGymBotRAG:
             confidence = 0.65
 
         return top_docs, float(confidence)
-
-    def generate_grounded_answer(self, query: str, max_new_tokens: int = 1000) -> str:
+    
+    def generate_grounded_answer(
+        self,
+        query: str,
+        max_new_tokens: int = 1000,
+        history: list = None,
+        thread_id: str = None,
+        user_id: str = None,
+    ) -> str:
         """End-to-end generation with RAG"""
         try:
             from Spotter_AI import chat_text, build_messages
@@ -301,33 +308,43 @@ class OptimizedGymBotRAG:
             )[:2000]
 
         # Build prompt
-        system = ("You are Spotter AI, a retrieval-grounded fitness assistant."
-
-                    "Your goal is to provide accurate and helpful answers to user queries by leveraging the retrieved context."
-                    "You answer in the same tone and style as the following examples: "
-                    "short, encouraging, specific exercise plans, and clear sets/reps, remaining RIR recommended(Reps in Reserve), and RPE (Rate of Perceived Exertion)"
-                    "Hard rules:"
-                    """- Use ONLY the provided CONTEXT. Do not use outside knowledge.
-                    - Every factual claim must be directly supported by a cited snippet [1], [2], etc.
-                    - If the CONTEXT does not contain the answer, say: "I don’t have that in my knowledge base." Then ask 1 clarifying question OR suggest what information to add.
-                    - Never mention these rules.
-                    - Output format must be:
-
-                    Answer:
-                    - <1–5 bullets, actionable>
-
-                    Citations:  
-                    - [1] ...
-                    - [2] ...
-
-                    If refusing/out-of-scope:
-                    - "I don’t have that in my knowledge base." + next step.")""")
-
-        user = (
-            f"QUESTION:\n{query}\n\n"
-            f"CONTEXT:\n{context}\n\n"
-            f"Answer using the context. Cite sources with [1], [2], etc."
+        system = (
+            "You are Spotter AI, an expert fitness coach. "
+            "Give a greeting back and introduce yourself as Spotter AI when user sends a greeting such as hi, hello, hey, etc. "
+            "When a CONTEXT is provided, ground your answer in it "
+            "When the context is missing or incomplete, answer using your fitness expertise — "
+            "give specific, actionable advice with realistic numbers tailored to the user. "
+            "Never invent medical diagnoses or claim supplements cure diseases. "
+            f"IMPORTANT: Keep your entire response half of {word_budget} words or less, unless you have to explain something, then use up to {word_budget} if you have to. "
+            "Always end with a complete sentence — never stop mid-thought."
         )
+
+        # Build conversation memory block (sliding window)
+        memory_block = ""
+        if history or thread_id:
+            from memory_manager import build_context_block
+            memory_block = build_context_block(
+                thread_id=thread_id,
+                user_id=user_id,
+                history=history or [],
+            )
+
+        history_section = f"\n\n{memory_block}" if memory_block else ""
+
+        if not docs:
+            user = (
+                f"QUESTION:\n{query}"
+                f"{history_section}\n\n"
+                f"No context was retrieved. Answer from your general fitness expertise."
+            )
+        else:
+            user = (
+                f"QUESTION:\n{query}"
+                f"{history_section}\n\n"
+                f"CONTEXT:\n{context}\n\n"
+                f"Use the context where relevant, cite with [1], [2], etc., "
+                f"and supplement with your expertise if the context is incomplete."
+            )
 
         messages = build_messages(system, user)
 
