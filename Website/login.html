@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Spotter AI - Guest</title>
+  <link rel="stylesheet" href="style.css" />
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+</head>
+
+<body class="home-page">
+  <header class="nav">
+    <a href="home.html" class="logo">SpotterAI</a>
+    <ul class="nav-links">
+      <li><a href="guest.html">GuestBot</a></li>
+    </ul>
+  </header>
+
+  <main class="page_guest">
+    <section class="auth-panel">
+  <h2>Welcome to SpotterAI</h2>
+  <p>Log in or create an account to continue.</p>
+
+  <form id="login-form" class="auth-form">
+    <input id="login-email" type="email" placeholder="Email" required>
+    <input id="login-password" type="password" placeholder="Password" required>
+    <button type="submit">Log in</button>
+  </form>
+
+  <p class="auth-switch">
+    Don't have an account?
+    <a href="signup.html" class="auth-link-button">Sign up</a>
+  </p>
+
+  <p id="auth-message"></p>
+</section>
+  </main>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+    const supabaseUrl = 'https://ezowjohfkxvaajeqilkx.supabase.co';
+    const supabaseAnonKey = 'sb_publishable__ajmqfcEBopf6B-aKLIzuw_XmyvssUq';
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+    const authMessage = document.getElementById('auth-message');
+
+    async function ensureProfile(user) {
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          full_name: '',
+          username: user.email?.split('@')[0] ?? '',
+          avatar_url: ''
+        });
+
+      if (error) {
+        console.error(error.message);
+      }
+    }
+
+    document.getElementById('login-form')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      authMessage.textContent = '';
+
+      const email = document.getElementById('login-email').value.trim();
+      const password = document.getElementById('login-password').value;
+
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+      if (error) {
+        authMessage.textContent = error.message;
+        return;
+      }
+
+      window.location.href = 'home.html';
+    });
+
+  </script>
+</body>
+</html>
