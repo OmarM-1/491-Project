@@ -11,8 +11,10 @@ Performance target: <2s for 80% of queries, <10s for complex 20%
 from typing import Dict, Any, Tuple
 import re
 import os
+import os
 from SAFETY_AGENT import safety_gate_agent
 from Spotter_AI import chat_text
+from nutrition import call_calorie_agent, format_calorie_response, call_diet_agent
 
 # Import both RAG systems
 try:
@@ -30,10 +32,25 @@ except ImportError:
     print("⚠️  Agentic RAG not available")
 
 # =========================
+# Nutrition Intent Detection
+# =========================
+CALORIE_KEYWORDS = re.compile(
+    r"\b(calorie|calories|tdee|bmr|maintenance|bulk|cut|deficit|surplus)\b",
+    re.IGNORECASE,
+)
+
+DIET_KEYWORDS = re.compile(
+    r"\b(meal plan|diet|macros?|protein|carbs?|fats?|nutrition)\b",
+    re.IGNORECASE,
+)
+
+
+# =========================
 # Query Complexity Scorer
 # =========================
 class ComplexityScorer:
     """Determines if a query needs agentic reasoning"""
+
 
     # Keywords that suggest calculation needs
     CALC_KEYWORDS = [
@@ -43,6 +60,7 @@ class ComplexityScorer:
         'if i', 'should i'
     ]
 
+
     # Keywords suggesting multi-part queries
     COMPLEX_KEYWORDS = [
         'and', 'both', 'also', 'compare', 'versus', 'vs',
@@ -51,6 +69,7 @@ class ComplexityScorer:
         'best way', 'optimal', 'recommend'
     ]
 
+
     # Keywords for simple factual queries (prefer regular RAG)
     SIMPLE_KEYWORDS = [
         'what is', 'define', 'definition', 'explain',
@@ -58,10 +77,12 @@ class ComplexityScorer:
         'muscles worked', 'benefits of'
     ]
 
+
     @classmethod
     def score(cls, query: str) -> int:
         """
         Score query complexity 0-10
+
 
         0-4: Simple factual (use regular RAG)
         5-7: Moderate complexity (use regular RAG, but close)
@@ -70,9 +91,12 @@ class ComplexityScorer:
         query_lower = query.lower()
         score = 3  # Start below threshold to prefer regular RAG
 
+        score = 5  # Start at neutral
+
         # Check for calculation needs (+3)
         if any(kw in query_lower for kw in cls.CALC_KEYWORDS):
             score += 3
+
 
         # Check for multi-part complexity (+2)
         complex_matches = sum(1 for kw in cls.COMPLEX_KEYWORDS if kw in query_lower)
@@ -81,13 +105,16 @@ class ComplexityScorer:
         elif complex_matches == 1:
             score += 1
 
+
         # Check for simple queries (-2)
         if any(kw in query_lower for kw in cls.SIMPLE_KEYWORDS):
             score -= 2
 
+
         # Question marks suggest simpler queries (-1)
         if query.count('?') == 1 and len(query.split()) < 15:
             score -= 1
+
 
         # Very long queries are usually complex (+1)
         word_count = len(query.split())
@@ -96,12 +123,15 @@ class ComplexityScorer:
         elif word_count < 10:
             score -= 1
 
+
         # Has numbers? Likely needs calculation (+1)
         if re.search(r'\d+', query):
             score += 1
 
+
         # Clamp to 0-10
         return max(0, min(10, score))
+
 
     @classmethod
     def explain_score(cls, query: str) -> str:
@@ -109,23 +139,30 @@ class ComplexityScorer:
         score = cls.score(query)
         query_lower = query.lower()
 
+
         reasons = []
+
 
         if any(kw in query_lower for kw in cls.CALC_KEYWORDS):
             reasons.append("needs calculation")
+
 
         complex_count = sum(1 for kw in cls.COMPLEX_KEYWORDS if kw in query_lower)
         if complex_count > 0:
             reasons.append(f"{complex_count} complexity indicators")
 
+
         if any(kw in query_lower for kw in cls.SIMPLE_KEYWORDS):
             reasons.append("simple factual query")
+
 
         if re.search(r'\d+', query):
             reasons.append("contains numbers")
 
+
         word_count = len(query.split())
         reasons.append(f"{word_count} words")
+
 
         reason_str = ", ".join(reasons)
         return f"Score {score}/10: {reason_str}"
@@ -137,6 +174,7 @@ class HybridOrchestrator:
     """
     Routes queries intelligently between RAG systems
     """
+
 
     def __init__(
         self,
@@ -157,13 +195,16 @@ class HybridOrchestrator:
         self.force_agentic = force_agentic
         self.verbose = verbose
 
+
         # Check availability
         if not REGULAR_RAG_AVAILABLE and not AGENTIC_RAG_AVAILABLE:
             raise RuntimeError("No RAG systems available!")
 
+
     def _route(self, query: str) -> Tuple[str, str]:
         """
         Decide which RAG system to use
+
 
         Returns:
             (system_name, reason)
@@ -174,19 +215,23 @@ class HybridOrchestrator:
         if self.force_agentic:
             return "agentic", "forced by flag"
 
+
         # Handle missing systems
         if not REGULAR_RAG_AVAILABLE:
             return "agentic", "regular RAG not available"
         if not AGENTIC_RAG_AVAILABLE:
             return "regular", "agentic RAG not available"
 
+
         # Score complexity
         score = ComplexityScorer.score(query)
+
 
         if score >= self.threshold:
             return "agentic", f"complex query (score {score})"
         else:
             return "regular", f"simple query (score {score})"
+
 
     def answer(
         self,
@@ -196,13 +241,16 @@ class HybridOrchestrator:
         """
         Main entry point - routes and answers query
 
+
         Args:
             query: User question
             return_metadata: If True, return dict with metadata
 
+
         Returns:
             answer string or dict with metadata
         """
+
         # Safety check
         ok, warning = safety_gate_agent(
             query,
@@ -211,7 +259,38 @@ class HybridOrchestrator:
             )
         )
 
+        ok, warning = safety_gate_agent(query)
+
         if not ok:
+            from Spotter_AI import build_messages, chat_text
+            import hashlib
+
+            system = (
+                "You are Spotter AI. The user's query triggered a safety block.\n"
+                "You must refuse to answer the request.\n"
+                "Do not give medical advice, diagnosis, treatment steps, or drug instructions.\n"
+                "Give a brief refusal and suggest appropriate next steps (urgent care/emergency services if needed).\n"
+                "Keep it under 5 sentences and be calm and supportive."
+            )
+
+            user = f"User query:\n{query}\n\nWrite the refusal response now."
+
+            messages = build_messages(system, user)
+
+            # Optional: makes refusal stable per identical input; remove seed for more variation.
+            seed = int(hashlib.sha256(query.encode()).hexdigest(), 16) % (2**31 - 1)
+
+            refusal = chat_text(
+                messages,
+                max_new_tokens=160,
+                intent="safety",
+                confidence=1.0,
+                seed=seed,
+                do_sample=True,
+                temperature=0.35,
+                top_p=0.9,
+                repetition_penalty=1.05,
+            )
             from Spotter_AI import build_messages, chat_text
             import hashlib
 
@@ -244,14 +323,72 @@ class HybridOrchestrator:
             if return_metadata:
                 return {
                     'answer': refusal,
+                    'answer': refusal,
                     'system': 'safety',
                     'safe': False,
                     'route_reason': 'safety check failed'
                 }
             return refusal
 
+            return refusal
+        
+        # ----- Nutrition Routing ----------------------
+
+        q_lower = query.lower()
+        def _extract_nutrition_params(text: str) -> Dict[str, Any]:
+            # TODO: Implement a proper parser
+            return {
+                "sex": "male",
+                "age": 25,
+                "height_cm": 178.0,
+                "weight_kg": 80.0,
+                "activity_level": "moderate",
+                "goal": "maintain",
+            }
+        # ----- Calorie Agent Path -----
+        if CALORIE_KEYWORDS.search(q_lower):
+            params = _extract_nutrition_params(query)
+            try:
+                raw = call_calorie_agent(**params)
+                answer_txt = format_calorie_response(raw)
+                if return_metadata:
+                    return {
+                        'answer': answer_txt,
+                        'system': 'calorie_agent',
+                        'safe': True,
+                        'route_reason': 'calorie-related query'
+                    }
+                return answer_txt
+            except Exception as e:
+                print(f"❌ Error calling Calorie Agent: {str(e)} - falling back to RAG")
+
+        # ---- Diet Agent Path -----
+        if DIET_KEYWORDS.search(q_lower):
+            params = _extract_nutrition_params(query)
+            try:
+                goal = params.get("goal", "maintain")
+                weight_kg = params["weight_kg"]
+                target_calories = 2400 # later: derive from calorie agent
+                answer_txt = call_diet_agent(
+                    goal=goal,
+                    weight_kg=weight_kg,
+                    target_calories=target_calories,
+                    dietary_style=None,
+                )
+                if return_metadata:
+                    return {
+                        'answer': answer_txt,
+                        'system': 'diet_agent',
+                        'safe': True,
+                        'route_reason': 'diet-related query'
+                    }
+                return answer_txt
+            except Exception as e:
+                print(f"❌ Error calling Diet Agent: {str(e)} - falling back to RAG")
+
         # Route
         system, reason = self._route(query)
+
 
         if self.verbose:
             print(f"\n🔀 Routing to {system.upper()} RAG")
@@ -259,9 +396,11 @@ class HybridOrchestrator:
             if system == "agentic":
                 print(f"   Note: This may take 5-10 seconds...")
 
+
         # Execute
         import time
         start = time.time()
+
 
         try:
             if system == "regular":
@@ -279,10 +418,20 @@ class HybridOrchestrator:
                     'complexity_score': ComplexityScorer.score(query),
                 }
 
+                # CHANGED: call agentic_answer(agent, query, ...)
+                agent = get_agent(verbose=self.verbose)
+                answer = agentic_answer(agent, query)
+                metadata = {
+                    'system': 'agentic',
+                    'complexity_score': ComplexityScorer.score(query),
+                }
+
             elapsed = time.time() - start
+
 
             if self.verbose:
                 print(f"✅ Answered in {elapsed:.2f}s using {system} RAG")
+
 
             if return_metadata:
                 metadata.update({
@@ -293,11 +442,14 @@ class HybridOrchestrator:
                 })
                 return metadata
 
+
             return answer
+
 
         except Exception as e:
             error_msg = f"Error with {system} RAG: {str(e)}"
             print(f"❌ {error_msg}")
+
 
             if return_metadata:
                 return {
@@ -306,6 +458,7 @@ class HybridOrchestrator:
                     'error': str(e),
                     'safe': True
                 }
+
 
             return "I encountered an error processing your query. Please try again."
 
@@ -337,16 +490,21 @@ def analyze_query(query: str) -> None:
     print(f"\nQuery: {query}")
     print("="*60)
 
+
     score = ComplexityScorer.score(query)
     explanation = ComplexityScorer.explain_score(query)
 
+
     print(f"Complexity: {explanation}")
+
 
     orchestrator = get_orchestrator()
     system, reason = orchestrator._route(query)
 
+
     print(f"Route: {system.upper()} RAG")
     print(f"Reason: {reason}")
+
 
     print(f"\nThreshold: {orchestrator.threshold}")
     print(f"This query: {'ABOVE' if score >= orchestrator.threshold else 'BELOW'} threshold")
@@ -368,8 +526,10 @@ def interactive_mode():
     print("  !help - Show this help")
     print("\nType your questions (Ctrl+C to exit)\n")
 
+
     orchestrator = get_orchestrator(verbose=True)
     stats = {'regular': 0, 'agentic': 0, 'safety': 0}
+
 
     try:
         while True:
@@ -377,13 +537,16 @@ def interactive_mode():
             if not query:
                 continue
 
+
             # Handle commands
             if query.startswith('!'):
                 cmd = query.split()[0].lower()
 
+
                 if cmd == '!analyze':
                     analyze_query(' '.join(query.split()[1:]))
                     continue
+
 
                 elif cmd == '!stats':
                     total = sum(stats.values())
@@ -393,11 +556,13 @@ def interactive_mode():
                         print(f"  {system.capitalize()}: {count} ({pct:.1f}%)")
                     continue
 
+
                 elif cmd == '!regular':
                     orchestrator.force_regular = True
                     orchestrator.force_agentic = False
                     print("✅ Forcing regular RAG mode")
                     continue
+
 
                 elif cmd == '!agentic':
                     orchestrator.force_agentic = True
@@ -405,11 +570,13 @@ def interactive_mode():
                     print("✅ Forcing agentic RAG mode")
                     continue
 
+
                 elif cmd == '!auto':
                     orchestrator.force_regular = False
                     orchestrator.force_agentic = False
                     print("✅ Automatic routing enabled")
                     continue
+
 
                 elif cmd == '!help':
                     print("\nCommands:")
@@ -420,25 +587,32 @@ def interactive_mode():
                     print("  !auto - Auto routing")
                     continue
 
+
                 else:
                     print("Unknown command. Type !help for help.")
                     continue
+
 
             # Process query
             print("\n" + "-"*60)
             result = orchestrator.answer(query, return_metadata=True)
 
+
             print(f"\n📝 Answer:\n{result['answer']}\n")
             print(f"🔧 System: {result['system']}")
             print(f"⏱️  Time: {result.get('time_seconds', 0):.2f}s")
 
+
             if 'complexity_score' in result:
                 print(f"📊 Complexity: {result['complexity_score']}/10")
+
 
             # Update stats
             stats[result['system']] = stats.get(result['system'], 0) + 1
 
+
             print("-"*60)
+
 
     except KeyboardInterrupt:
         print("\n\nFinal Statistics:")

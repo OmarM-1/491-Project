@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>GymBot Web Chat</title>
+</head>
+<body>
+  <h1>GymBot Chat</h1>
+
+  <form id="chat-form">
+    <label>Your message:</label><br />
+    <textarea id="message" rows="3" cols="60"></textarea><br />
+    <button type="submit">Send</button>
+  </form>
+
+  <h2>Response:</h2>
+  <pre id="reply"></pre>
+
+  <script>
+    const form = document.getElementById("chat-form");
+    const messageEl = document.getElementById("message");
+    const replyEl = document.getElementById("reply");
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const message = messageEl.value.trim();
+      if (!message) return;
+
+      replyEl.textContent = "Thinking...";
+
+      try {
+        const res = await fetch("http://127.0.0.1:8000/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+        });
+
+        const data = await res.json();
+        replyEl.textContent = data.reply ?? JSON.stringify(data, null, 2);
+      } catch (err) {
+        replyEl.textContent = "Error: " + err.message;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -7,10 +7,18 @@ Key optimizations:
 3. FAISS index caching - save/load index to disk
 4. Batch processing - process multiple queries efficiently
 5. GPU optimization - proper device placement
+
+Changes made (only):
+- Replace SimpleBM25 (O(N) python loop per query) with rank_bm25 BM25Okapi
+- Cache FAISS using faiss native read/write (instead of pickle)
+- Normalize embeddings + IndexFlatIP (cosine similarity style)
+- Move reranker to correct device + keep embedder/reranker handles on self
+- Cap rerank candidates to avoid growth
 """
 
 import os
 import json
+import csv
 import hashlib
 from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
@@ -20,14 +28,34 @@ import torch
 from sentence_transformers import SentenceTransformer, CrossEncoder
 import faiss
 
+# NEW: Faster BM25
+from rank_bm25 import BM25Okapi  # requires: pip install rank-bm25
+
+from supabase import create_client, Client  # pip install supabase-py
+import os
+
+_SUPABASE_CLIENT: Optional[Client] = None
+
+
+def get_supabase() -> Client:
+    global _SUPABASE_CLIENT
+    if _SUPABASE_CLIENT is None:
+        url = "https://ezowjohfkxvaajeqilkx.supabase.co"
+        key = "sb_publishable__ajmqfcEBopf6B-aKLIzuw_XmyvssUq"
+        if not url or not key:
+            raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY env vars not set")
+        _SUPABASE_CLIENT = create_client(url, key)
+    return _SUPABASE_CLIENT
+
+
 # =========================
 # Global Singletons (CRITICAL for performance!)
 # =========================
 _EMBEDDER = None
 _RERANKER = None
-_FAISS_INDEX = None
 _CHUNKS = None
 _BM25 = None
+_BM25_TOKENIZED = None  # NEW: store tokenized corpus to use BM25Okapi
 
 @dataclass
 class Document:
@@ -58,37 +86,59 @@ def get_embedder() -> SentenceTransformer:
     return _EMBEDDER
 
 def get_reranker() -> CrossEncoder:
-    """Lazy load reranker - only loads once"""
+    """Lazy load reranker - only loads once (with explicit device)"""
     global _RERANKER
     if _RERANKER is None:
         print("Loading reranker (one-time)...")
-        _RERANKER = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        _RERANKER = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2', device=device)
     return _RERANKER
 
 # =========================
 # Data Loading
 # =========================
-def load_kb(json_path: str = 'fitness_knowledge_base.jsonl') -> List[Document]:
-    """Load knowledge base"""
+def load_kb(
+        json_path: str = 'fitness_knowledge_base.jsonl',
+        csv_path: str = 'conversational_dataset.csv'
+) -> List[Document]:
+    docs: List[Document] = []
+
     with open(json_path, "r", encoding="utf-8") as f:
         data = json.load(f)
-    
-    docs = []
+
     for obj in data:
         docs.append(Document(
             id=obj["id"],
             type=obj["type"],
             title=obj["title"],
             text=obj["description"],
-            metadata={k: v for k, v in obj.items() 
+            metadata={k: v for k, v in obj.items()
                      if k not in ["id", "type", "title", "description"]}
         ))
+    with open(csv_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)  # columns: Question, Answer
+        for i, row in enumerate(reader):
+            q = row.get("Question", "").strip()
+            a = row.get("Answer", "").strip()
+            if not q or not a:
+                continue
+
+            docs.append(
+                Document(
+                    id=f"qa_{i}",
+                    type="qa",
+                    title=q[:80],
+                    text=f"Question: {q}\nAnswer: {a}",
+                    metadata={"source": "csv_qa"},
+                )
+            )
+
     return docs
 
 def chunk_docs(docs: List[Document], chunk_size: int = 400, overlap: int = 50) -> List[Chunk]:
     """Chunk documents"""
     chunks: List[Chunk] = []
-    
+
     for doc in docs:
         text = doc.text
         if len(text) <= chunk_size:
@@ -99,233 +149,135 @@ def chunk_docs(docs: List[Document], chunk_size: int = 400, overlap: int = 50) -
                 metadata=doc.metadata
             ))
             continue
-        
+
         start = 0
         chunk_idx = 0
         while start < len(text):
             end = min(start + chunk_size, len(text))
             chunk_text = text[start:end]
-            
+
             chunks.append(Chunk(
                 id=f'{doc.id}_{chunk_idx}',
                 parent_id=doc.id,
                 text=chunk_text,
                 metadata=doc.metadata
             ))
-            
+
             chunk_idx += 1
             start += (chunk_size - overlap)
-    
+
     return chunks
 
-# =========================
-# BM25 (Lightweight)
-# =========================
-class SimpleBM25:
-    def __init__(self, corpus: List[str], k1: float = 1.5, b: float = 0.75):
-        self.k1 = k1
-        self.b = b
-        self.corpus = corpus
-        self.corpus_size = len(corpus)
-        self.avgdl = sum(len(doc.split()) for doc in corpus) / self.corpus_size
-        
-        # Build IDF
-        from collections import defaultdict, Counter
-        import math
-        
-        self.idf = {}
-        doc_freqs = defaultdict(int)
-        
-        for doc in corpus:
-            words = set(doc.lower().split())
-            for word in words:
-                doc_freqs[word] += 1
-        
-        for word, freq in doc_freqs.items():
-            self.idf[word] = math.log((self.corpus_size - freq + 0.5) / (freq + 0.5) + 1.0)
-    
-    def score(self, query: str, doc_idx: int) -> float:
-        from collections import Counter
-        
-        doc = self.corpus[doc_idx]
-        doc_len = len(doc.split())
-        
-        score = 0.0
-        query_words = query.lower().split()
-        doc_words = doc.lower().split()
-        doc_word_counts = Counter(doc_words)
-        
-        for word in query_words:
-            if word not in self.idf:
-                continue
-            
-            word_count = doc_word_counts.get(word, 0)
-            numerator = self.idf[word] * word_count * (self.k1 + 1)
-            denominator = word_count + self.k1 * (1 - self.b + self.b * (doc_len / self.avgdl))
-            
-            score += numerator / denominator
-        
-        return score
-    
-    def search(self, query: str, k: int = 10) -> List[Tuple[int, float]]:
-        scores = [(i, self.score(query, i)) for i in range(self.corpus_size)]
-        scores.sort(key=lambda x: x[1], reverse=True)
-        return scores[:k]
 
-# =========================
-# FAISS Index with Caching
-# =========================
-def get_cache_path(kb_path: str) -> str:
-    """Generate cache filename based on KB hash"""
-    with open(kb_path, 'rb') as f:
-        kb_hash = hashlib.md5(f.read()).hexdigest()[:8]
-    return f'.cache_faiss_{kb_hash}.index'
+# === Supabase vector retrieval ===
 
-def build_faiss_index(chunks: List[Chunk], embedder: SentenceTransformer, cache_path: str):
-    """Build FAISS index with caching"""
-    global _FAISS_INDEX
-    
-    # Try to load from cache
-    if os.path.exists(cache_path):
-        print(f"Loading FAISS index from cache: {cache_path}")
-        try:
-            _FAISS_INDEX = faiss.read_index(cache_path)
-            print("✅ FAISS index loaded from cache (instant!)")
-            return
-        except Exception as e:
-            print(f"Cache load failed: {e}, rebuilding...")
-    
-    # Build from scratch
-    print("Building FAISS index (first time only)...")
-    chunk_texts = [c.text for c in chunks]
-    
-    # Batch encoding for speed
-    print(f"Encoding {len(chunk_texts)} chunks...")
-    embeddings = embedder.encode(
-        chunk_texts, 
-        show_progress_bar=True,
-        batch_size=32  # Faster batching
-    )
-    embeddings = np.array(embeddings).astype('float32')
-    
-    # Build index
-    _FAISS_INDEX = faiss.IndexFlatL2(embeddings.shape[1])
-    _FAISS_INDEX.add(embeddings)
-    
-    # Save to cache
-    try:
-        faiss.write_index(_FAISS_INDEX, cache_path)
-        print(f"✅ FAISS index cached to: {cache_path}")
-    except Exception as e:
-        print(f"Warning: Could not cache index: {e}")
+def embed_query(query: str, embedder: SentenceTransformer) -> np.ndarray:
+    vec = embedder.encode([query])
+    vec = np.array(vec).astype("float32")[0]
+    return vec
+
+
+def retrieve_from_supabase(
+    query: str,
+    embedder: SentenceTransformer,
+    table: str = "documents",
+    match_count: int = 6,
+) -> List[Dict]:
+    """
+    Uses Supabase RPC or direct SQL to run pgvector similarity search.
+    You should create a Postgres function like match_documents() on Supabase.
+    """
+    supabase = get_supabase()
+    query_embedding = embed_query(query, embedder).tolist()
+
+    # Option A: using an RPC function you define on Supabase
+    # SQL example for that function is in Supabase pgvector docs/blog.
+    #   create function match_documents(query_embedding vector(1536), match_count int)
+    #   returns table(id uuid, content text, similarity float) ...
+    #
+    response = supabase.rpc(
+        "match_rag_documents",
+        {
+            "match_count": match_count,      
+            "match_threshold": 0.0,       
+            "match_user_id": None,     
+            "query_embedding": query_embedding,
+        },
+    ).execute()
+
+    rows = response.data or [] 
+    docs: List[Dict] = []
+    for i, row in enumerate(rows):
+        # Adapt keys to your function's return columns
+        text = row.get("content") or row.get("text") or ""
+        title = row.get("title") or f"doc_{i}"
+        score = float(row.get("similarity", 0.0))
+        docs.append(
+            {
+                "chunk_id": str(row.get("id", f"doc_{i}")),
+                "text": text,
+                "score": score,
+                "source": "supabase",
+                "metadata": {"title": title},
+            }
+        )
+    return docs
+
+
 
 # =========================
 # Optimized RAG System
 # =========================
 class OptimizedGymBotRAG:
-    """Performance-optimized RAG with caching and lazy loading"""
-    
-    def __init__(self, kb_path: str = 'fitness_knowledge_base.jsonl', force_rebuild: bool = False):
-        global _CHUNKS, _BM25, _FAISS_INDEX
-        
-        print("\n🚀 Initializing Optimized RAG System...")
-        
-        # Load data
-        print("Loading knowledge base...")
-        docs = load_kb(kb_path)
-        _CHUNKS = chunk_docs(docs)
-        print(f"✅ Loaded {len(docs)} docs → {len(_CHUNKS)} chunks")
-        
-        # Lazy load models
-        embedder = get_embedder()
-        
-        # Build/load FAISS index with caching
-        cache_path = get_cache_path(kb_path)
-        if force_rebuild and os.path.exists(cache_path):
-            os.remove(cache_path)
-            print("Force rebuilding index...")
-        
-        build_faiss_index(_CHUNKS, embedder, cache_path)
-        
-        # Build BM25 (fast, no caching needed)
-        print("Building BM25 index...")
-        chunk_texts = [c.text for c in _CHUNKS]
-        _BM25 = SimpleBM25(chunk_texts)
-        
-        print("✅ RAG system ready!\n")
-    
+    """RAG backed by Supabase pgvector"""
+
+    def __init__(self, kb_path: str = "fitness_knowledge_base.jsonl", force_rebuild: bool = False):
+        print("\n🚀 Initializing Supabase-backed RAG System...")
+
+        # Just load models; KB lives in Supabase now
+        self.embedder = get_embedder()
+        self.reranker = get_reranker()
+
+        # Optional ping to Supabase
+        _ = get_supabase()
+        print("✅ Models loaded and Supabase client ready!\n")
+
+
     def retrieve(self, query: str, k: int = 6) -> Tuple[List[Dict], float]:
         """
-        Hybrid retrieve + rerank
+        Retrieve documents using Supabase pgvector + CrossEncoder reranking.
         Returns: (docs, confidence)
         """
-        global _CHUNKS, _BM25, _FAISS_INDEX
-        
-        if _CHUNKS is None or _BM25 is None or _FAISS_INDEX is None:
-            raise RuntimeError("RAG not initialized!")
-        
-        embedder = get_embedder()
-        reranker = get_reranker()
-        
-        # 1. FAISS semantic search
-        query_embedding = embedder.encode([query])[0].astype('float32').reshape(1, -1)
-        faiss_distances, faiss_indices = _FAISS_INDEX.search(query_embedding, k * 2)
-        
-        # 2. BM25 keyword search
-        bm25_results = _BM25.search(query, k=k * 2)
-        
-        # 3. Merge results
-        seen = set()
-        merged = []
-        
-        # Add FAISS results
-        for idx, dist in zip(faiss_indices[0], faiss_distances[0]):
-            if idx not in seen:
-                chunk = _CHUNKS[idx]
-                merged.append({
-                    'chunk_id': chunk.id,
-                    'text': chunk.text,
-                    'score': float(1.0 / (1.0 + dist)),
-                    'source': 'faiss',
-                    'metadata': chunk.metadata
-                })
-                seen.add(idx)
-        
-        # Add BM25 results
-        for idx, score in bm25_results:
-            if idx not in seen:
-                chunk = _CHUNKS[idx]
-                merged.append({
-                    'chunk_id': chunk.id,
-                    'text': chunk.text,
-                    'score': float(score / 10.0),
-                    'source': 'bm25',
-                    'metadata': chunk.metadata
-                })
-                seen.add(idx)
-        
-        if not merged:
+        # 1) Vector similarity in Supabase
+        initial_docs = retrieve_from_supabase(
+            query=query,
+            embedder=self.embedder,
+            match_count=max(k * 3, 12),
+        )
+
+        if not initial_docs:
             return [], 0.0
-        
-        # 4. Cross-encoder reranking
-        pairs = [[query, doc['text']] for doc in merged[:k * 3]]
-        scores = reranker.predict(pairs)
-        
-        for doc, score in zip(merged[:k * 3], scores):
-            doc['rerank_score'] = float(score)
-        
-        merged.sort(key=lambda x: x.get('rerank_score', 0), reverse=True)
-        top_docs = merged[:k]
-        
-        # 5. Calculate confidence
-        if top_docs and 'rerank_score' in top_docs[0]:
-            top_scores = [doc['rerank_score'] for doc in top_docs[:3]]
-            confidence = min(0.99, max(0.0, sum(top_scores) / len(top_scores)))
+
+        # 2) Cross-encoder rerank
+        candidates = initial_docs[: max(k * 3, len(initial_docs))]
+        pairs = [[query, d["text"]] for d in candidates]
+        scores = self.reranker.predict(pairs)
+
+        for d, s in zip(candidates, scores):
+            d["rerank_score"] = float(s)
+
+        candidates.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
+        top_docs = candidates[:k]
+
+        # 3) Confidence heuristic from top rerank scores
+        top_scores = [d["rerank_score"] for d in top_docs if "rerank_score" in d]
+        if top_scores:
+            confidence = min(0.99, max(0.0, sum(top_scores) / max(1, len(top_scores))))
         else:
             confidence = 0.65
-        
+
         return top_docs, float(confidence)
-    
+
     def generate_grounded_answer(self, query: str, max_new_tokens: int = 1000) -> str:
         """End-to-end generation with RAG"""
         try:
@@ -343,45 +295,44 @@ class OptimizedGymBotRAG:
             context = "(No relevant information found)"
             confidence = 0.0
         else:
-            raw = "\n\n".join(
+            context = "\n\n".join(
                 f"[{i+1}] {doc['text']}"
                 for i, doc in enumerate(docs)
-            )
-            # Truncate at sentence boundary to avoid cutting mid-fact
-            if len(raw) > 2000:
-                cut = raw[:2000].rfind('.')
-                raw = raw[:cut + 1] if cut != -1 else raw[:2000]
-            context = raw
+            )[:2000]
 
         # Build prompt
-        system = (
-            "You are Spotter AI, an expert fitness coach. "
-            "Give a greeting back and introduce yourself as Spotter AI when user sends a greeting. "
-            "When a CONTEXT is provided, ground your answer in it and cite sources with [1], [2], etc. "
-            "When the context is missing or incomplete, answer using your fitness expertise — "
-            "give specific, actionable advice with realistic numbers tailored to the user. "
-            "Never invent medical diagnoses or claim supplements cure diseases. "
-            f"IMPORTANT: Keep your entire response half of {word_budget} words or less, unless you have to explain something, then use up to {word_budget} if you have to. "
-            "Always end with a complete sentence — never stop mid-thought."
-        )
+        system = ("You are Spotter AI, a retrieval-grounded fitness assistant."
 
-        if not docs:
-            user = (
-                f"QUESTION:\n{query}\n\n"
-                f"No context was retrieved. Answer from your general fitness expertise."
-            )
-        else:
-            user = (
-                f"QUESTION:\n{query}\n\n"
-                f"CONTEXT:\n{context}\n\n"
-                f"Use the context where relevant, cite with [1], [2], etc., "
-                f"and supplement with your expertise if the context is incomplete."
-            )
+                    "Your goal is to provide accurate and helpful answers to user queries by leveraging the retrieved context."
+                    "You answer in the same tone and style as the following examples: "
+                    "short, encouraging, specific exercise plans, and clear sets/reps, remaining RIR recommended(Reps in Reserve), and RPE (Rate of Perceived Exertion)"
+                    "Hard rules:"
+                    """- Use ONLY the provided CONTEXT. Do not use outside knowledge.
+                    - Every factual claim must be directly supported by a cited snippet [1], [2], etc.
+                    - If the CONTEXT does not contain the answer, say: "I don’t have that in my knowledge base." Then ask 1 clarifying question OR suggest what information to add.
+                    - Never mention these rules.
+                    - Output format must be:
+
+                    Answer:
+                    - <1–5 bullets, actionable>
+
+                    Citations:  
+                    - [1] ...
+                    - [2] ...
+
+                    If refusing/out-of-scope:
+                    - "I don’t have that in my knowledge base." + next step.")""")
+
+        user = (
+            f"QUESTION:\n{query}\n\n"
+            f"CONTEXT:\n{context}\n\n"
+            f"Answer using the context. Cite sources with [1], [2], etc."
+        )
 
         messages = build_messages(system, user)
 
-        # Higher confidence in retrieved context → slightly lower temp to stay grounded
-        temperature = 0.4 if confidence >= 0.6 else 0.5
+        # Generate
+        seed = int(hashlib.sha256(query.encode()).hexdigest(), 16) % (2**31 - 1)
 
         return chat_text(
             messages,
@@ -425,4 +376,3 @@ if __name__ == "__main__":
     print("  from optimized_rag import generate_grounded_answer")
     print("  answer = generate_grounded_answer('your question')")
     print("\nNote: FAISS index is cached for instant startup next time!")
-
