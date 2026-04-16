@@ -348,9 +348,7 @@ class OptimizedGymBotRAG:
 
         messages = build_messages(system, user)
 
-        # Generate
-        seed = int(hashlib.sha256(query.encode()).hexdigest(), 16) % (2**31 - 1)
-
+        temperature = 0.4 if confidence >= 0.6 else 0.5
         return chat_text(
             messages,
             max_new_tokens=max_new_tokens,
