@@ -68,7 +68,7 @@ class ComplexityScorer:
         8-10: Complex reasoning (use agentic RAG)
         """
         query_lower = query.lower()
-        score = 5  # Start at neutral
+        score = 3  # Start below threshold to prefer regular RAG
 
         # Check for calculation needs (+3)
         if any(kw in query_lower for kw in cls.CALC_KEYWORDS):
@@ -140,7 +140,7 @@ class HybridOrchestrator:
 
     def __init__(
         self,
-        complexity_threshold: int = 6,  # CHANGED: above 5 => threshold 6
+        complexity_threshold: int = 8,
         force_regular: bool = False,
         force_agentic: bool = False,
         verbose: bool = False
@@ -315,7 +315,7 @@ class HybridOrchestrator:
 _ORCHESTRATOR = None
 
 def get_orchestrator(
-    complexity_threshold: int = 6,  # CHANGED: default threshold
+    complexity_threshold: int = 8,
     verbose: bool = False
 ) -> HybridOrchestrator:
     """Get global orchestrator instance"""

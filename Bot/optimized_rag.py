@@ -326,49 +326,67 @@ class OptimizedGymBotRAG:
         
         return top_docs, float(confidence)
     
-    def generate_grounded_answer(self, query: str, max_new_tokens: int = 400) -> str:
+    def generate_grounded_answer(self, query: str, max_new_tokens: int = 1000) -> str:
         """End-to-end generation with RAG"""
         try:
             from Spotter_AI import chat_text, build_messages
         except ImportError:
             raise ImportError("Spotter_AI not available")
-        
+
+        # Token budget: ~0.75 words per token, leave 20% headroom
+        word_budget = int(max_new_tokens * 0.75 * 0.8)
+
         # Retrieve context
         docs, confidence = self.retrieve(query, k=6)
-        
+
         if not docs:
             context = "(No relevant information found)"
             confidence = 0.0
         else:
-            context = "\n\n".join(
-                f"[{i+1}] {doc['text']}" 
+            raw = "\n\n".join(
+                f"[{i+1}] {doc['text']}"
                 for i, doc in enumerate(docs)
-            )[:2000]
-        
+            )
+            # Truncate at sentence boundary to avoid cutting mid-fact
+            if len(raw) > 2000:
+                cut = raw[:2000].rfind('.')
+                raw = raw[:cut + 1] if cut != -1 else raw[:2000]
+            context = raw
+
         # Build prompt
         system = (
-            "You are Spotter AI, a helpful fitness assistant. "
-            "Use the provided CONTEXT to answer accurately. "
-            "Keep advice practical and actionable."
+            "You are Spotter AI, an expert fitness coach. "
+            "Give a greeting back and introduce yourself as Spotter AI when user sends a greeting. "
+            "When a CONTEXT is provided, ground your answer in it and cite sources with [1], [2], etc. "
+            "When the context is missing or incomplete, answer using your fitness expertise — "
+            "give specific, actionable advice with realistic numbers tailored to the user. "
+            "Never invent medical diagnoses or claim supplements cure diseases. "
+            f"IMPORTANT: Keep your entire response half of {word_budget} words or less, unless you have to explain something, then use up to {word_budget} if you have to. "
+            "Always end with a complete sentence — never stop mid-thought."
         )
-        
-        user = (
-            f"QUESTION:\n{query}\n\n"
-            f"CONTEXT:\n{context}\n\n"
-            f"Answer using the context. Cite sources with [1], [2], etc."
-        )
-        
+
+        if not docs:
+            user = (
+                f"QUESTION:\n{query}\n\n"
+                f"No context was retrieved. Answer from your general fitness expertise."
+            )
+        else:
+            user = (
+                f"QUESTION:\n{query}\n\n"
+                f"CONTEXT:\n{context}\n\n"
+                f"Use the context where relevant, cite with [1], [2], etc., "
+                f"and supplement with your expertise if the context is incomplete."
+            )
+
         messages = build_messages(system, user)
-        
-        # Generate
-        seed = int(hashlib.sha256(query.encode()).hexdigest(), 16) % (2**31 - 1)
-        
+
+        # Higher confidence in retrieved context → slightly lower temp to stay grounded
+        temperature = 0.4 if confidence >= 0.6 else 0.5
+
         return chat_text(
             messages,
             max_new_tokens=max_new_tokens,
-            intent="knowledge",
-            confidence=confidence,
-            seed=seed
+            temperature=temperature,
         )
 
 # =========================
