@@ -19,47 +19,52 @@
 
   <main class="page_guest">
     <section class="auth-panel">
-      <h2 id="step-title">Create your SpotterAI account</h2>
+      <h1 id="step-title">Create your SpotterAI account</h1>
       <p id="step-subtitle">Step 1 of 3: Account details</p>
 
-      <form id="signup-form" class="auth-form">
-        <!-- STEP 1: email + password -->
+      <form id="signup-form" class="auth-form" novalidate>
         <div class="signup-step signup-step--active" data-step="1">
-          <input id="signup-email" type="email" placeholder="Email" required>
-          <input id="signup-password" type="password" placeholder="Create password" required>
+          <label for="signup-email">Email</label>
+          <input id="signup-email" type="email" placeholder="Email" autocomplete="email" required>
+
+          <label for="signup-password">Create password</label>
+          <input id="signup-password" type="password" placeholder="Create password" autocomplete="new-password" minlength="8" required>
 
           <button type="button" id="next-btn-1">Next</button>
         </div>
 
-        <!-- STEP 2: personal info + sex -->
         <div class="signup-step" data-step="2">
+          <label for="full-name">Full name</label>
           <input id="full-name" type="text" placeholder="Full name" required>
 
+          <label for="age">Age</label>
           <input id="age" type="number" placeholder="Age" min="13" max="100" required>
 
+          <label for="weight">Weight (lbs)</label>
           <input id="weight" type="number" placeholder="Weight (lbs)" min="50" max="700" step="0.1" required>
 
+          <label for="height">Height (inches)</label>
           <input id="height" type="number" placeholder="Height (inches)" min="36" max="96" step="0.1" required>
 
-          <div class="sex-group">
-            <span class="sex-label">Sex</span>
+          <fieldset class="sex-group">
+            <legend class="sex-label">Sex</legend>
             <div class="sex-options">
-              <label class="sex-option">
-                <input type="radio" name="sex" value="male" required>
+              <label class="sex-option" for="sex-male">
+                <input id="sex-male" type="radio" name="sex" value="male" required>
                 <span>Male</span>
               </label>
 
-              <label class="sex-option">
-                <input type="radio" name="sex" value="female" required>
+              <label class="sex-option" for="sex-female">
+                <input id="sex-female" type="radio" name="sex" value="female">
                 <span>Female</span>
               </label>
 
-              <label class="sex-option">
-                <input type="radio" name="sex" value="prefer_not_to_say" required>
+              <label class="sex-option" for="sex-pnts">
+                <input id="sex-pnts" type="radio" name="sex" value="prefer_not_to_say">
                 <span>Prefer not to say</span>
               </label>
             </div>
-          </div>
+          </fieldset>
 
           <div class="step-actions">
             <button type="button" id="back-btn-2">Back</button>
@@ -67,37 +72,36 @@
           </div>
         </div>
 
-        <!-- STEP 3: goal (vertical pills) -->
         <div class="signup-step" data-step="3">
-          <div class="goal-group">
-            <span class="goal-label">Goal</span>
+          <fieldset class="goal-group">
+            <legend class="goal-label">Goal</legend>
             <div class="goal-options">
-              <label class="goal-option">
-                <input type="radio" name="goal" value="lose_weight" required>
+              <label class="goal-option" for="goal-lose-weight">
+                <input id="goal-lose-weight" type="radio" name="goal" value="lose_weight" required>
                 <span>Lose weight</span>
               </label>
 
-              <label class="goal-option">
-                <input type="radio" name="goal" value="build_muscle" required>
+              <label class="goal-option" for="goal-build-muscle">
+                <input id="goal-build-muscle" type="radio" name="goal" value="build_muscle">
                 <span>Build muscle</span>
               </label>
 
-              <label class="goal-option">
-                <input type="radio" name="goal" value="maintain_weight" required>
+              <label class="goal-option" for="goal-maintain-weight">
+                <input id="goal-maintain-weight" type="radio" name="goal" value="maintain_weight">
                 <span>Maintain weight</span>
               </label>
 
-              <label class="goal-option">
-                <input type="radio" name="goal" value="improve_fitness" required>
+              <label class="goal-option" for="goal-improve-fitness">
+                <input id="goal-improve-fitness" type="radio" name="goal" value="improve_fitness">
                 <span>Improve fitness</span>
               </label>
 
-              <label class="goal-option">
-                <input type="radio" name="goal" value="eat_healthier" required>
+              <label class="goal-option" for="goal-eat-healthier">
+                <input id="goal-eat-healthier" type="radio" name="goal" value="eat_healthier">
                 <span>Eat healthier</span>
               </label>
             </div>
-          </div>
+          </fieldset>
 
           <div class="step-actions">
             <button type="button" id="back-btn-3">Back</button>
@@ -106,7 +110,7 @@
         </div>
       </form>
 
-      <p id="auth-message"></p>
+      <p id="auth-message" aria-live="polite"></p>
     </section>
   </main>
 
@@ -115,24 +119,21 @@
 
     const supabaseUrl = 'https://ezowjohfkxvaajeqilkx.supabase.co';
     const supabaseAnonKey = 'sb_publishable__ajmqfcEBopf6B-aKLIzuw_XmyvssUq';
-    const supabase = createClient(supabaseUrl, supabaseAnonKey); // [web:44]
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     const authMessage = document.getElementById('auth-message');
     const form = document.getElementById('signup-form');
     const steps = form.querySelectorAll('.signup-step');
-    const nextBtn1 = document.getElementById('next-btn-1');
-    const nextBtn2 = document.getElementById('next-btn-2');
-    const backBtn2 = document.getElementById('back-btn-2');
-    const backBtn3 = document.getElementById('back-btn-3');
     const stepTitle = document.getElementById('step-title');
     const stepSubtitle = document.getElementById('step-subtitle');
 
     let currentStep = 1;
 
     function showStep(step) {
-      steps.forEach(s => {
-        s.classList.toggle('signup-step--active', Number(s.dataset.step) === step);
+      steps.forEach(section => {
+        section.classList.toggle('signup-step--active', Number(section.dataset.step) === step);
       });
+
       currentStep = step;
 
       if (step === 1) {
@@ -147,40 +148,59 @@
       }
     }
 
-    nextBtn1?.addEventListener('click', () => {
-      authMessage.textContent = '';
-      const emailInput = document.getElementById('signup-email');
-      const passInput = document.getElementById('signup-password');
+    function validateStep1() {
+      const email = document.getElementById('signup-email');
+      const password = document.getElementById('signup-password');
 
-      if (!emailInput.checkValidity()) {
-        emailInput.reportValidity();
-        return;
-      }
-      if (!passInput.checkValidity()) {
-        passInput.reportValidity();
-        return;
+      if (!email.checkValidity()) {
+        email.reportValidity();
+        return false;
       }
 
-      showStep(2);
-    });
+      if (!password.checkValidity()) {
+        password.reportValidity();
+        return false;
+      }
 
-    nextBtn2?.addEventListener('click', () => {
-      authMessage.textContent = '';
-      // optional: validate step 2 fields before moving on
-      showStep(3);
-    });
+      return true;
+    }
 
-    backBtn2?.addEventListener('click', () => {
-      authMessage.textContent = '';
-      showStep(1);
-    });
+    function validateStep2() {
+      const fullName = document.getElementById('full-name');
+      const age = document.getElementById('age');
+      const weight = document.getElementById('weight');
+      const height = document.getElementById('height');
+      const sex = form.querySelector('input[name="sex"]:checked');
 
-    backBtn3?.addEventListener('click', () => {
-      authMessage.textContent = '';
-      showStep(2);
-    });
+      for (const field of [fullName, age, weight, height]) {
+        if (!field.checkValidity()) {
+          field.reportValidity();
+          return false;
+        }
+      }
+
+      if (!sex) {
+        authMessage.textContent = 'Please select a sex option.';
+        return false;
+      }
+
+      return true;
+    }
+
+    function validateStep3() {
+      const goal = form.querySelector('input[name="goal"]:checked');
+
+      if (!goal) {
+        authMessage.textContent = 'Please choose a goal.';
+        return false;
+      }
+
+      return true;
+    }
 
     async function ensureProfile(user, meta) {
+      if (!user) return;
+
       const { error } = await supabase
         .from('profiles')
         .upsert({
@@ -190,35 +210,63 @@
           weight: meta.weight,
           height: meta.height,
           sex: meta.sex,
-          goals: meta.goals,
+          goals: meta.goal,
           username: user.email?.split('@')[0] ?? '',
           avatar_url: ''
         });
 
-      if (error) console.error(error.message);
+      if (error) {
+        console.error('Profile upsert failed:', error.message);
+      }
     }
+
+    document.getElementById('next-btn-1')?.addEventListener('click', () => {
+      authMessage.textContent = '';
+      if (validateStep1()) showStep(2);
+    });
+
+    document.getElementById('next-btn-2')?.addEventListener('click', () => {
+      authMessage.textContent = '';
+      if (validateStep2()) showStep(3);
+    });
+
+    document.getElementById('back-btn-2')?.addEventListener('click', () => {
+      authMessage.textContent = '';
+      showStep(1);
+    });
+
+    document.getElementById('back-btn-3')?.addEventListener('click', () => {
+      authMessage.textContent = '';
+      showStep(2);
+    });
 
     form?.addEventListener('submit', async (e) => {
       e.preventDefault();
       authMessage.textContent = '';
 
+      if (!validateStep1() || !validateStep2() || !validateStep3()) return;
+
       const email = document.getElementById('signup-email').value.trim();
       const password = document.getElementById('signup-password').value;
 
-      const fullName = document.getElementById('full-name').value.trim();
-      const age = Number(document.getElementById('age').value);
-      const weight = Number(document.getElementById('weight').value);
-      const height = Number(document.getElementById('height').value);
-      const sex = form.querySelector('input[name="sex"]:checked')?.value;
-      const goals = form.querySelector('input[name="goal"]:checked')?.value;
+      const meta = {
+        full_name: document.getElementById('full-name').value.trim(),
+        age: Number(document.getElementById('age').value),
+        weight: Number(document.getElementById('weight').value),
+        height: Number(document.getElementById('height').value),
+        sex: form.querySelector('input[name="sex"]:checked')?.value,
+        goal: form.querySelector('input[name="goal"]:checked')?.value
+      };
 
-      const meta = { full_name: fullName, age, weight, height, sex, goals };
+      authMessage.textContent = 'Creating account...';
 
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: meta }
-      }); // [web:44][web:16]
+        options: {
+          data: meta
+        }
+      });
 
       if (error) {
         authMessage.textContent = error.message;
@@ -232,10 +280,10 @@
       authMessage.textContent = 'Account created. Check your email if confirmation is enabled.';
     });
 
-    const { data } = await supabase.auth.getSession();
-    if (data.session) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (sessionData.session) {
       window.location.href = 'home.html';
-    } // [web:16][web:44]
+    }
   </script>
 </body>
 </html>

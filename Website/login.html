@@ -19,22 +19,26 @@
 
   <main class="page_guest">
     <section class="auth-panel">
-  <h2>Welcome to SpotterAI</h2>
-  <p>Log in or create an account to continue.</p>
+      <h1>Welcome to SpotterAI</h1>
+      <p>Log in or create an account to continue.</p>
 
-  <form id="login-form" class="auth-form">
-    <input id="login-email" type="email" placeholder="Email" required>
-    <input id="login-password" type="password" placeholder="Password" required>
-    <button type="submit">Log in</button>
-  </form>
+      <form id="login-form" class="auth-form">
+        <label for="login-email" class="sr-only">Email</label>
+        <input id="login-email" type="email" placeholder="Email" autocomplete="email" required>
 
-  <p class="auth-switch">
-    Don't have an account?
-    <a href="signup.html" class="auth-link-button">Sign up</a>
-  </p>
+        <label for="login-password" class="sr-only">Password</label>
+        <input id="login-password" type="password" placeholder="Password" autocomplete="current-password" required>
 
-  <p id="auth-message"></p>
-</section>
+        <button type="submit">Log in</button>
+      </form>
+
+      <p class="auth-switch">
+        Don't have an account?
+        <a href="signup.html" class="auth-link-button">Sign up</a>
+      </p>
+
+      <p id="auth-message" aria-live="polite"></p>
+    </section>
   </main>
 
   <script type="module">
@@ -45,30 +49,48 @@
     const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
     const authMessage = document.getElementById('auth-message');
+    const loginForm = document.getElementById('login-form');
 
     async function ensureProfile(user) {
+      if (!user) return;
+
+      const username = user.email?.split('@')[0] ?? '';
+
       const { error } = await supabase
         .from('profiles')
         .upsert({
           id: user.id,
           full_name: '',
-          username: user.email?.split('@')[0] ?? '',
+          username,
           avatar_url: ''
         });
 
       if (error) {
-        console.error(error.message);
+        console.error('Profile upsert failed:', error.message);
       }
     }
 
-    document.getElementById('login-form')?.addEventListener('submit', async (e) => {
+    async function redirectIfLoggedIn() {
+      const { data, error } = await supabase.auth.getSession();
+
+      if (error) {
+        console.error(error.message);
+        return;
+      }
+
+      if (data.session) {
+        window.location.href = 'member.html';
+      }
+    }
+
+    loginForm?.addEventListener('submit', async (e) => {
       e.preventDefault();
-      authMessage.textContent = '';
+      authMessage.textContent = 'Logging in...';
 
       const email = document.getElementById('login-email').value.trim();
       const password = document.getElementById('login-password').value;
 
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
@@ -78,9 +100,17 @@
         return;
       }
 
-      window.location.href = 'home.html';
+      await ensureProfile(data.user);
+      window.location.href = 'member.html';
     });
 
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        window.location.href = 'member.html';
+      }
+    });
+
+    redirectIfLoggedIn();
   </script>
 </body>
 </html>
