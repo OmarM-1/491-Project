@@ -4,23 +4,24 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Spotter AI - Guest</title>
+  <title>Spotter AI - Login</title>
   <link rel="stylesheet" href="style.css" />
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
 
 <body class="home-page">
   <header class="nav">
-    <a href="home.html" class="logo">SpotterAI</a>
+    <a href="guest.html" class="logo">SpotterAI</a>
     <ul class="nav-links">
-      <li><a href="guest.html">GuestBot</a></li>
+      <li><a href="guest.html">Guest</a></li>
+      <li><a href="signup.html">Sign up</a></li>
     </ul>
   </header>
 
   <main class="page_guest">
     <section class="auth-panel">
-      <h1>Welcome to SpotterAI</h1>
-      <p>Log in or create an account to continue.</p>
+      <h1>Welcome back</h1>
+      <p>Log in to access your personalized SpotterAI dashboard.</p>
 
       <form id="login-form" class="auth-form">
         <label for="login-email" class="sr-only">Email</label>
@@ -51,34 +52,9 @@
     const authMessage = document.getElementById('auth-message');
     const loginForm = document.getElementById('login-form');
 
-    async function ensureProfile(user) {
-      if (!user) return;
-
-      const username = user.email?.split('@')[0] ?? '';
-
-      const { error } = await supabase
-        .from('profiles')
-        .upsert({
-          id: user.id,
-          full_name: '',
-          username,
-          avatar_url: ''
-        });
-
-      if (error) {
-        console.error('Profile upsert failed:', error.message);
-      }
-    }
-
     async function redirectIfLoggedIn() {
-      const { data, error } = await supabase.auth.getSession();
-
-      if (error) {
-        console.error(error.message);
-        return;
-      }
-
-      if (data.session) {
+      const { data } = await supabase.auth.getUser();
+      if (data.user) {
         window.location.href = 'member.html';
       }
     }
@@ -90,7 +66,7 @@
       const email = document.getElementById('login-email').value.trim();
       const password = document.getElementById('login-password').value;
 
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
@@ -100,14 +76,7 @@
         return;
       }
 
-      await ensureProfile(data.user);
       window.location.href = 'member.html';
-    });
-
-    supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_IN' && session) {
-        window.location.href = 'member.html';
-      }
     });
 
     redirectIfLoggedIn();

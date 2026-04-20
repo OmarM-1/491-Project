@@ -4,66 +4,143 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Spotter AI</title>
+  <title>Spotter AI - Member</title>
   <link rel="stylesheet" href="style.css" />
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons"
-        rel="stylesheet">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
 
 <body class="home-page">
-  <header class="nav">       
-        <a href="home.html" class="logo">SpotterAI</a>  
-                <ul class="nav-links">
-                    <li><a href="profile.html"> Profile </a></li>
-                    <li><a href="saved_meal_plans.html"> Meal plans </a></li>
-                    <li><a href="saved_workouts.html"> Saved Workouts </a></li>
-                </ul>
-        </header>
+  <header class="nav">
+    <a href="member.html" class="logo">SpotterAI</a>
+
+    <ul class="nav-links">
+      <li><a href="profile.html">Profile</a></li>
+      <li><a href="saved_meal_plans.html">Meal plans</a></li>
+      <li><a href="saved_workouts.html">Saved Workouts</a></li>
+      <li><button id="logout-btn" class="member-logout-btn">Log out</button></li>
+    </ul>
   </header>
 
+  <main class="member-layout">
+    <aside class="member-sidebar">
+      <section class="member-profile-card">
+        <p class="member-label">Member Dashboard</p>
+        <h2 id="member-heading">Loading member...</h2>
+        <p id="member-subtitle" class="member-muted">Loading your profile...</p>
 
-  <main class="page_guest">
-    <section class="hero">
-      <h1>(Guest) SpotterAI</h1>
-      <p>Ask a question about training or nutrition.</p>
+        <div class="member-profile-list">
+          <div class="member-profile-row">
+            <span>Name</span>
+            <strong id="profile-name">--</strong>
+          </div>
 
-      <!-- CHAT MESSAGES AREA -->
-      <div id="chat-window" class="chat-window">
-        <!-- Messages will be appended here by JS -->
+          <div class="member-profile-row">
+            <span>Email</span>
+            <strong id="profile-email">--</strong>
+          </div>
+
+          <div class="member-profile-row">
+            <span>Goal</span>
+            <strong id="profile-goal">--</strong>
+          </div>
+
+          <div class="member-profile-row">
+            <span>Age</span>
+            <strong id="profile-age">--</strong>
+          </div>
+
+          <div class="member-profile-row">
+            <span>Weight</span>
+            <strong id="profile-weight">--</strong>
+          </div>
+
+          <div class="member-profile-row">
+            <span>Height</span>
+            <strong id="profile-height">--</strong>
+          </div>
+
+          <div class="member-profile-row">
+            <span>Sex</span>
+            <strong id="profile-sex">--</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="member-profile-card">
+        <p class="member-label">Quick prompts</p>
+        <div class="member-prompt-list">
+          <button class="member-prompt-btn" data-prompt="Create a workout plan based on my goal.">Workout plan</button>
+          <button class="member-prompt-btn" data-prompt="Estimate my calories and protein for my goal.">Calories & protein</button>
+          <button class="member-prompt-btn" data-prompt="Give me a simple weekly plan based on my profile.">Weekly plan</button>
+        </div>
+      </section>
+    </aside>
+
+    <section class="member-chat-area">
+      <div class="member-chat-header">
+        <div>
+          <p class="member-label">Personalized Chat</p>
+          <h1>SpotterAI Coach</h1>
+          <p class="member-muted">Your chat responses can use your saved profile information.</p>
+        </div>
       </div>
 
-      <!-- INPUT AREA -->
-      <div class="chat-input-wrapper">
+      <div id="chat-window" class="chat-window member-chat-window"></div>
+
+      <div class="chat-input-wrapper member-chat-input">
         <textarea
           class="chat-input"
           id="chat-input"
-          placeholder="Ask a question..."
+          placeholder="Ask a personalized question..."
           rows="1"
         ></textarea>
+
         <button id="send-button" aria-label="Send">
-          <img src="up-arrow-icon.webp" alt="Send">
+          <img src="up-arrow-icon-10.jpg" alt="Send">
         </button>
       </div>
     </section>
   </main>
 
-  <script>
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+
+    const supabaseUrl = 'https://ezowjohfkxvaajeqilkx.supabase.co';
+    const supabaseAnonKey = 'sb_publishable__ajmqfcEBopf6B-aKLIzuw_XmyvssUq';
+    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
     const textarea = document.getElementById('chat-input');
     const sendButton = document.getElementById('send-button');
     const chatWindow = document.getElementById('chat-window');
 
-    // Auto-resize textarea
+    let currentUser = null;
+    let currentProfile = null;
+
+    function appendMessage(role, text) {
+      const row = document.createElement('div');
+      row.classList.add('chat-message-row', role);
+
+      const bubble = document.createElement('div');
+      bubble.classList.add('chat-bubble', role);
+      bubble.textContent = text;
+
+      row.appendChild(bubble);
+      chatWindow.appendChild(row);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+
+    function setField(id, value) {
+      document.getElementById(id).textContent =
+        value !== null && value !== undefined && value !== '' ? value : '--';
+    }
+
     textarea.addEventListener('input', () => {
       textarea.style.height = 'auto';
       textarea.style.height = textarea.scrollHeight + 'px';
     });
 
-    // Send on button click
-    sendButton.addEventListener('click', () => {
-      handleSend();
-    });
+    sendButton.addEventListener('click', handleSend);
 
-    // Send on Enter (Shift+Enter gives new line)
     textarea.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -71,52 +148,112 @@
       }
     });
 
-    function appendMessage(role, text) {
-      const msg = document.createElement('div');
-      msg.classList.add('chat-message', role); // role: 'user' or 'assistant'
-      msg.textContent = text;
-      chatWindow.appendChild(msg);
-      chatWindow.scrollTop = chatWindow.scrollHeight;
-    }
+    document.querySelectorAll('.member-prompt-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        textarea.value = btn.dataset.prompt;
+        textarea.focus();
+      });
+    });
 
-    const API_URL = 'http://localhost:8000';
+    async function loadMemberProfile() {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
+
+      if (userError || !userData.user) {
+        window.location.href = 'login.html';
+        return;
+      }
+
+      currentUser = userData.user;
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', currentUser.id)
+        .single();
+
+      if (profileError || !profile) {
+        window.location.href = 'signup.html';
+        return;
+      }
+
+      currentProfile = profile;
+
+      setField('profile-name', profile.full_name);
+      setField('profile-email', currentUser.email);
+      setField('profile-goal', profile.goals);
+      setField('profile-age', profile.age);
+      setField('profile-weight', profile.weight ? `${profile.weight} lbs` : '');
+      setField('profile-height', profile.height ? `${profile.height} in` : '');
+      setField('profile-sex', profile.sex);
+
+      document.getElementById('member-heading').textContent =
+        `Welcome back, ${profile.full_name || 'Member'}`;
+
+      document.getElementById('member-subtitle').textContent =
+        `Goal: ${profile.goals || 'Not set'}`;
+
+      appendMessage(
+        'assistant',
+        `Hi ${profile.full_name?.split(' ')[0] || 'there'} — I can use your profile to help with workouts, nutrition, and your ${profile.goals || 'fitness'} goal.`
+      );
+    }
 
     async function handleSend() {
       const question = textarea.value.trim();
-      if (!question) return;
+      if (!question || !currentProfile) return;
 
       appendMessage('user', question);
       textarea.value = '';
       textarea.style.height = 'auto';
 
-      const loadingMsg = document.createElement('div');
-      loadingMsg.classList.add('chat-message', 'assistant');
-      loadingMsg.textContent = 'Thinking...';
-      chatWindow.appendChild(loadingMsg);
+      const loadingRow = document.createElement('div');
+      loadingRow.classList.add('chat-message-row', 'assistant');
+
+      const loadingBubble = document.createElement('div');
+      loadingBubble.classList.add('chat-bubble', 'assistant');
+      loadingBubble.textContent = 'Thinking...';
+
+      loadingRow.appendChild(loadingBubble);
+      chatWindow.appendChild(loadingRow);
       chatWindow.scrollTop = chatWindow.scrollHeight;
 
       try {
-        const res = await fetch(`${API_URL}/chat`, {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
+
+        const res = await fetch('http://localhost:8000/chat', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: question }),
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          },
+          body: JSON.stringify({
+            message: question,
+            profile: currentProfile
+          })
         });
 
         if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
         const data = await res.json();
-        loadingMsg.remove();
+        loadingRow.remove();
 
         if (data.error) {
           appendMessage('assistant', `Error: ${data.error}`);
         } else {
           appendMessage('assistant', data.answer);
         }
-
       } catch (err) {
-        loadingMsg.textContent = `Connection error — is the API running? (${err.message})`;
+        loadingBubble.textContent = `Connection error — is the API running? (${err.message})`;
       }
     }
+
+    document.getElementById('logout-btn')?.addEventListener('click', async () => {
+      await supabase.auth.signOut();
+      window.location.href = 'login.html';
+    });
+
+    loadMemberProfile();
   </script>
 </body>
 </html>

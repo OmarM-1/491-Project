@@ -11,7 +11,7 @@
 
 <body class="home-page">
   <header class="nav">
-    <a href="home.html" class="logo">SpotterAI</a>
+    <a href="guest.html" class="logo">SpotterAI</a>
     <ul class="nav-links">
       <li><a href="login.html">Login</a></li>
     </ul>
@@ -22,7 +22,7 @@
       <h1 id="step-title">Create your SpotterAI account</h1>
       <p id="step-subtitle">Step 1 of 3: Account details</p>
 
-      <form id="signup-form" class="auth-form" novalidate>
+      <form autocomplete="off" id="signup-form" class="auth-form" novalidate>
         <div class="signup-step signup-step--active" data-step="1">
           <label for="signup-email">Email</label>
           <input id="signup-email" type="email" placeholder="Email" autocomplete="email" required>
@@ -49,18 +49,18 @@
           <fieldset class="sex-group">
             <legend class="sex-label">Sex</legend>
             <div class="sex-options">
-              <label class="sex-option" for="sex-male">
-                <input id="sex-male" type="radio" name="sex" value="male" required>
+              <label class="sex-option">
+                <input type="radio" name="sex" value="male" required>
                 <span>Male</span>
               </label>
 
-              <label class="sex-option" for="sex-female">
-                <input id="sex-female" type="radio" name="sex" value="female">
+              <label class="sex-option">
+                <input type="radio" name="sex" value="female">
                 <span>Female</span>
               </label>
 
-              <label class="sex-option" for="sex-pnts">
-                <input id="sex-pnts" type="radio" name="sex" value="prefer_not_to_say">
+              <label class="sex-option">
+                <input type="radio" name="sex" value="prefer_not_to_say">
                 <span>Prefer not to say</span>
               </label>
             </div>
@@ -76,29 +76,39 @@
           <fieldset class="goal-group">
             <legend class="goal-label">Goal</legend>
             <div class="goal-options">
-              <label class="goal-option" for="goal-lose-weight">
-                <input id="goal-lose-weight" type="radio" name="goal" value="lose_weight" required>
+              <label class="goal-option">
+                <input type="radio" name="goal" value="lose_weight" required>
                 <span>Lose weight</span>
               </label>
 
-              <label class="goal-option" for="goal-build-muscle">
-                <input id="goal-build-muscle" type="radio" name="goal" value="build_muscle">
+              <label class="goal-option">
+                <input type="radio" name="goal" value="build_muscle">
                 <span>Build muscle</span>
               </label>
 
-              <label class="goal-option" for="goal-maintain-weight">
-                <input id="goal-maintain-weight" type="radio" name="goal" value="maintain_weight">
+              <label class="goal-option">
+                <input type="radio" name="goal" value="maintain_weight">
                 <span>Maintain weight</span>
               </label>
 
-              <label class="goal-option" for="goal-improve-fitness">
-                <input id="goal-improve-fitness" type="radio" name="goal" value="improve_fitness">
+              <label class="goal-option">
+                <input type="radio" name="goal" value="improve_fitness">
                 <span>Improve fitness</span>
               </label>
 
-              <label class="goal-option" for="goal-eat-healthier">
-                <input id="goal-eat-healthier" type="radio" name="goal" value="eat_healthier">
+              <label class="goal-option">
+                <input type="radio" name="goal" value="eat_healthier">
                 <span>Eat healthier</span>
+              </label>
+
+              <label class="goal-option">
+                <input type="radio" name="goal" value="flexibility">
+                <span>Flexibility</span>
+              </label>
+
+              <label class="goal-option">
+                <input type="radio" name="goal" value="general_health">
+                <span>General health</span>
               </label>
             </div>
           </fieldset>
@@ -114,176 +124,185 @@
     </section>
   </main>
 
-  <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+    <script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-    const supabaseUrl = 'https://ezowjohfkxvaajeqilkx.supabase.co';
-    const supabaseAnonKey = 'sb_publishable__ajmqfcEBopf6B-aKLIzuw_XmyvssUq';
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  const supabaseUrl = 'https://ezowjohfkxvaajeqilkx.supabase.co';
+  const supabaseAnonKey = 'sb_publishable__ajmqfcEBopf6B-aKLIzuw_XmyvssUq';
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-    const authMessage = document.getElementById('auth-message');
-    const form = document.getElementById('signup-form');
-    const steps = form.querySelectorAll('.signup-step');
-    const stepTitle = document.getElementById('step-title');
-    const stepSubtitle = document.getElementById('step-subtitle');
+  const authMessage = document.getElementById('auth-message');
+  const form = document.getElementById('signup-form');
+  const steps = form.querySelectorAll('.signup-step');
+  const stepTitle = document.getElementById('step-title');
+  const stepSubtitle = document.getElementById('step-subtitle');
 
-    let currentStep = 1;
-
-    function showStep(step) {
-      steps.forEach(section => {
-        section.classList.toggle('signup-step--active', Number(section.dataset.step) === step);
-      });
-
-      currentStep = step;
-
-      if (step === 1) {
-        stepTitle.textContent = 'Create your SpotterAI account';
-        stepSubtitle.textContent = 'Step 1 of 3: Account details';
-      } else if (step === 2) {
-        stepTitle.textContent = 'Tell us about yourself';
-        stepSubtitle.textContent = 'Step 2 of 3: Fitness profile';
-      } else {
-        stepTitle.textContent = 'What is your main goal?';
-        stepSubtitle.textContent = 'Step 3 of 3: Training focus';
-      }
-    }
-
-    function validateStep1() {
-      const email = document.getElementById('signup-email');
-      const password = document.getElementById('signup-password');
-
-      if (!email.checkValidity()) {
-        email.reportValidity();
-        return false;
-      }
-
-      if (!password.checkValidity()) {
-        password.reportValidity();
-        return false;
-      }
-
-      return true;
-    }
-
-    function validateStep2() {
-      const fullName = document.getElementById('full-name');
-      const age = document.getElementById('age');
-      const weight = document.getElementById('weight');
-      const height = document.getElementById('height');
-      const sex = form.querySelector('input[name="sex"]:checked');
-
-      for (const field of [fullName, age, weight, height]) {
-        if (!field.checkValidity()) {
-          field.reportValidity();
-          return false;
-        }
-      }
-
-      if (!sex) {
-        authMessage.textContent = 'Please select a sex option.';
-        return false;
-      }
-
-      return true;
-    }
-
-    function validateStep3() {
-      const goal = form.querySelector('input[name="goal"]:checked');
-
-      if (!goal) {
-        authMessage.textContent = 'Please choose a goal.';
-        return false;
-      }
-
-      return true;
-    }
-
-    async function ensureProfile(user, meta) {
-      if (!user) return;
-
-      const { error } = await supabase
-        .from('profiles')
-        .upsert({
-          id: user.id,
-          full_name: meta.full_name,
-          age: meta.age,
-          weight: meta.weight,
-          height: meta.height,
-          sex: meta.sex,
-          goals: meta.goal,
-          username: user.email?.split('@')[0] ?? '',
-          avatar_url: ''
-        });
-
-      if (error) {
-        console.error('Profile upsert failed:', error.message);
-      }
-    }
-
-    document.getElementById('next-btn-1')?.addEventListener('click', () => {
-      authMessage.textContent = '';
-      if (validateStep1()) showStep(2);
+  function showStep(step) {
+    steps.forEach(section => {
+      section.classList.toggle('signup-step--active', Number(section.dataset.step) === step);
     });
 
-    document.getElementById('next-btn-2')?.addEventListener('click', () => {
-      authMessage.textContent = '';
-      if (validateStep2()) showStep(3);
+    if (step === 1) {
+      stepTitle.textContent = 'Create your SpotterAI account';
+      stepSubtitle.textContent = 'Step 1 of 3: Account details';
+    } else if (step === 2) {
+      stepTitle.textContent = 'Tell us about yourself';
+      stepSubtitle.textContent = 'Step 2 of 3: Fitness profile';
+    } else {
+      stepTitle.textContent = 'What is your main goal?';
+      stepSubtitle.textContent = 'Step 3 of 3: Training focus';
+    }
+  }
+
+  function validateStep1() {
+    const email = document.getElementById('signup-email');
+    const password = document.getElementById('signup-password');
+    if (!email.checkValidity()) return email.reportValidity(), false;
+    if (!password.checkValidity()) return password.reportValidity(), false;
+    return true;
+  }
+
+  function validateStep2() {
+    const fields = [
+      document.getElementById('full-name'),
+      document.getElementById('age'),
+      document.getElementById('weight'),
+      document.getElementById('height')
+    ];
+
+    for (const field of fields) {
+      if (!field.checkValidity()) return field.reportValidity(), false;
+    }
+
+    if (!form.querySelector('input[name="sex"]:checked')) {
+      authMessage.textContent = 'Please select a sex option.';
+      return false;
+    }
+
+    return true;
+  }
+
+  function validateStep3() {
+    if (!form.querySelector('input[name="goal"]:checked')) {
+      authMessage.textContent = 'Please choose a goal.';
+      return false;
+    }
+    return true;
+  }
+
+  document.getElementById('next-btn-1')?.addEventListener('click', () => {
+    authMessage.textContent = '';
+    if (validateStep1()) showStep(2);
+  });
+
+  document.getElementById('next-btn-2')?.addEventListener('click', () => {
+    authMessage.textContent = '';
+    if (validateStep2()) showStep(3);
+  });
+
+  document.getElementById('back-btn-2')?.addEventListener('click', () => showStep(1));
+  document.getElementById('back-btn-3')?.addEventListener('click', () => showStep(2));
+
+  form?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    authMessage.textContent = '';
+
+    if (!validateStep1() || !validateStep2() || !validateStep3()) return;
+
+    const email = document.getElementById('signup-email').value.trim();
+    const password = document.getElementById('signup-password').value;
+
+    // Collect from form (imperial in UI)
+    const fullName = document.getElementById('full-name').value.trim();
+    const age = Number(document.getElementById('age').value);
+    const weightLbs = Number(document.getElementById('weight').value);
+    const heightInches = Number(document.getElementById('height').value);
+    const sex = form.querySelector('input[name="sex"]:checked')?.value;
+    const goal = form.querySelector('input[name="goal"]:checked')?.value;
+
+    // Map UI goal -> enum if needed (adjust mappings to your real enum values)
+    let fitnessGoal = goal; // if your enum already includes these exact values
+    // Example mapping if not:
+    // switch (goal) {
+    //   case 'lose_weight': fitnessGoal = 'fat_loss'; break;
+    //   case 'build_muscle': fitnessGoal = 'muscle_gain'; break;
+    //   default: fitnessGoal = 'general_health';
+    // }
+
+    // Convert to schema units: cm and kg
+    const heightCm = Math.round(heightInches * 2.54);
+    const weightKg = Math.round(weightLbs * 0.453592 * 10) / 10;
+
+    const meta = {
+      display_name: fullName,
+      age,
+      height_cm: heightCm,
+      weight_kg: weightKg,
+      sex,
+      fitness_goal: fitnessGoal,
+      experience: 'beginner'
+    };
+
+    authMessage.textContent = 'Creating account...';
+
+    // 1) Create auth user
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: meta }
     });
 
-    document.getElementById('back-btn-2')?.addEventListener('click', () => {
-      authMessage.textContent = '';
-      showStep(1);
-    });
+    if (error) {
+      authMessage.textContent = error.message;
+      return;
+    }
 
-    document.getElementById('back-btn-3')?.addEventListener('click', () => {
-      authMessage.textContent = '';
-      showStep(2);
-    });
-
-    form?.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      authMessage.textContent = '';
-
-      if (!validateStep1() || !validateStep2() || !validateStep3()) return;
-
-      const email = document.getElementById('signup-email').value.trim();
-      const password = document.getElementById('signup-password').value;
-
-      const meta = {
-        full_name: document.getElementById('full-name').value.trim(),
-        age: Number(document.getElementById('age').value),
-        weight: Number(document.getElementById('weight').value),
-        height: Number(document.getElementById('height').value),
-        sex: form.querySelector('input[name="sex"]:checked')?.value,
-        goal: form.querySelector('input[name="goal"]:checked')?.value
+    // 2) Create or update profile row, depending on your RLS / trigger setup
+    if (data.user) {
+      const profilePayload = {
+        id: data.user.id, // only if you are inserting
+        username: data.user.email?.split('@')[0] ?? '',
+        display_name: meta.display_name,
+        age: meta.age,
+        height: meta.height,
+        weight: meta.weight,
+        sex: meta.sex,
+        fitness_goal: meta.fitness_goal,
+        experience: meta.experience,
+        timezone: 'UTC',
+        onboarding_done: true
       };
 
-      authMessage.textContent = 'Creating account...';
+      console.log('Profile payload:', profilePayload);
 
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: meta
-        }
-      });
+      // If no trigger exists and you have correct INSERT policy:
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert(profilePayload);
 
-      if (error) {
-        authMessage.textContent = error.message;
+      // If you DO have a trigger that already inserts the row, use this instead:
+      // const { error: profileError } = await supabase
+      //   .from('profiles')
+      //   .update(profilePayload)
+      //   .eq('id', data.user.id);
+
+      if (profileError) {
+        console.error('Profile save error:', profileError);
+        authMessage.textContent = profileError.message;
         return;
       }
-
-      if (data.user) {
-        await ensureProfile(data.user, meta);
-      }
-
-      authMessage.textContent = 'Account created. Check your email if confirmation is enabled.';
-    });
-
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (sessionData.session) {
-      window.location.href = 'home.html';
     }
-  </script>
+
+    authMessage.textContent = 'Account created. Redirecting...';
+    window.location.href = 'member.html';
+  });
+
+  // If already logged in, skip signup
+  const { data } = await supabase.auth.getUser();
+  if (data.user) {
+    window.location.href = 'member.html';
+  }
+</script>
+
 </body>
 </html>
