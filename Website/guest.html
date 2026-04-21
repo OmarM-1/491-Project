@@ -4,27 +4,36 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Spotter AI - Guest</title>
+  <title>Spotter AI</title>
   <link rel="stylesheet" href="style.css" />
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons"
         rel="stylesheet">
 </head>
 
 <body class="home-page">
-  <header class="nav">       
-        <a href="home.html" class="logo">SpotterAI</a>  
-                <ul class="nav-links">
-                    <li><a href="profile.html"> Profile </a></li>
-                    <li><a href="saved_meal_plans.html"> Meal plans </a></li>
-                    <li><a href="saved_workouts.html"> Saved Workouts </a></li>
-                </ul>
-        </header>
-  </header>
 
+  <header class="nav">       
+    <a href="home.html" class="logo">SpotterAI</a>  
+    <ul class="nav-links">
+      <li><a href="profile.html"> Profile </a></li>
+      <li><a href="saved_meal_plans.html"> Meal plans </a></li>
+      <li><a href="saved_workouts.html"> Saved Workouts </a></li>
+    </ul>
+  </header>
+<script>
+  const loggedIn = localStorage.getItem("loggedIn");
+
+  // If not logged in, show login modal after 5 seconds
+  if (!loggedIn) {
+    setTimeout(() => {
+      document.getElementById("login-modal").style.display = "flex";
+    }, 5000); // 5000 ms = 5 seconds
+  }
+</script>
 
   <main class="page_guest">
     <section class="hero">
-      <h1>(Guest) SpotterAI</h1>
+      <h1>SpotterAI</h1>
       <p>Ask a question about training or nutrition.</p>
 
       <!-- CHAT MESSAGES AREA -->
@@ -82,22 +91,22 @@
     });
 
     function appendMessage(role, text) {
-  const row = document.createElement('div');
-  row.className = `chat-row ${role}`;
+      const row = document.createElement('div');
+      row.className = `chat-row ${role}`;
 
-  const bubble = document.createElement('div');
-  bubble.className = `chat-bubble ${role}`;
+      const bubble = document.createElement('div');
+      bubble.className = `chat-bubble ${role}`;
 
-  if (role === 'assistant') {
-    bubble.innerHTML = renderMarkdown(text);
-  } else {
-    bubble.textContent = text;
-  }
+      if (role === 'assistant') {
+        bubble.innerHTML = renderMarkdown(text);
+      } else {
+        bubble.textContent = text;
+      }
 
-  row.appendChild(bubble);
-  chatWindow.appendChild(row);
-  chatWindow.scrollTop = chatWindow.scrollHeight;
-}
+      row.appendChild(bubble);
+      chatWindow.appendChild(row);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
 
     const API_URL = 'http://localhost:8000';
 
@@ -133,9 +142,80 @@
           appendMessage('assistant', data.answer);
         }
       } catch (err) {
-        loadingMsg.innerHTML = renderMarkdown(`**Connection error** — is the API running?\n\n\`${err.message}\``);
+        loadingMsg.innerHTML = renderMarkdown(
+          `**Connection error** — is the API running?\n\n\`${err.message}\``
+        );
       }
     }
   </script>
+<div id="login-modal" class="login-modal">
+  <div class="login-box">
+    <h2>Login Required</h2>
+    <p>You must log in to continue using SpotterAI.</p>
+    <button class="login-btn" onclick="window.location.href='login.html'">Log In</button>
+  </div>
+</div>
+
+<style>
+  /* Fullscreen overlay */
+  .login-modal {
+    display: none;
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.75);
+    backdrop-filter: blur(4px);
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+  }
+
+  /* Modal box styled like your dark UI */
+  .login-box {
+    background: #1a1a1a;
+    color: white;
+    padding: 30px 40px;
+    border-radius: 12px;
+    text-align: center;
+    width: 320px;
+    box-shadow: 0 0 20px rgba(0,0,0,0.4);
+    animation: fadeIn 0.3s ease-out;
+  }
+
+  .login-box h2 {
+    margin-bottom: 10px;
+    font-size: 24px;
+    font-weight: 600;
+  }
+
+  .login-box p {
+    margin-bottom: 20px;
+    font-size: 15px;
+    opacity: 0.85;
+  }
+
+  /* Button matches your theme */
+  .login-btn {
+    width: 100%;
+    padding: 12px;
+    background: #1133c8;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    cursor: pointer;
+    transition: 0.2s ease;
+  }
+
+  .login-btn:hover {
+    background: #1133c8;
+  }
+
+  /* Smooth fade-in animation */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+</style>
 </body>
 </html>

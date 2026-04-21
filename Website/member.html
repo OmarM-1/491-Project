@@ -87,18 +87,25 @@
 
       <div id="chat-window" class="chat-window member-chat-window"></div>
 
-      <div class="chat-input-wrapper member-chat-input">
-        <textarea
-          class="chat-input"
-          id="chat-input"
-          placeholder="Ask a personalized question..."
-          rows="1"
-        ></textarea>
+<div class="chat-input-wrapper member-chat-input">
 
-        <button id="send-button" aria-label="Send">
-          <img src="up-arrow-icon.webp" alt="Send">
-        </button>
-      </div>
+  <input type="file" id="mediaInput" accept="image/*,video/*" style="display:none">
+
+  <button id="upload-button" aria-label="Upload File">
+    <img src="paperclip-icon.png" alt="Upload" style="width:22px;">
+  </button>
+
+  <textarea
+    class="chat-input"
+    id="chat-input"
+    placeholder="Ask a personalized question..."
+    rows="1"
+  ></textarea>
+
+  <button id="send-button" aria-label="Send">
+    <img src="up-arrow-icon.webp" alt="Send">
+  </button>
+</div>
     </section>
   </main>
 
@@ -154,6 +161,51 @@
         textarea.focus();
       });
     });
+
+    // When upload button is clicked, open file picker
+document.getElementById("upload-button").addEventListener("click", () => {
+  document.getElementById("mediaInput").click();
+});
+
+document.getElementById("mediaInput").addEventListener("change", async () => {
+  const file = document.getElementById("mediaInput").files[0];
+  if (!file) return;
+
+  appendMessage("user", `📎 Uploaded: ${file.name}`);
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const loadingRow = document.createElement("div");
+  loadingRow.classList.add("chat-message-row", "assistant");
+
+  const loadingBubble = document.createElement("div");
+  loadingBubble.classList.add("chat-bubble", "assistant");
+  loadingBubble.textContent = "Analyzing file...";
+
+  loadingRow.appendChild(loadingBubble);
+  chatWindow.appendChild(loadingRow);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+
+  try {
+    const res = await fetch("http://localhost:8000/chat-with-media", {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await res.json();
+    loadingRow.remove();
+
+    if (data.error) {
+      appendMessage("assistant", `Error: ${data.error}`);
+    } else {
+      appendMessage("assistant", data.answer);
+    }
+  } catch (err) {
+    loadingBubble.textContent = `Connection error — ${err.message}`;
+  }
+});
+
 
     async function loadMemberProfile() {
       const { data: userData, error: userError } = await supabase.auth.getUser();
