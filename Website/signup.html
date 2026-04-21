@@ -221,22 +221,14 @@
     const goal = form.querySelector('input[name="goal"]:checked')?.value;
 
     // Map UI goal -> enum if needed (adjust mappings to your real enum values)
-    let fitnessGoal = goal; // if your enum already includes these exact values
-    // Example mapping if not:
-    // switch (goal) {
-    //   case 'lose_weight': fitnessGoal = 'fat_loss'; break;
-    //   case 'build_muscle': fitnessGoal = 'muscle_gain'; break;
-    //   default: fitnessGoal = 'general_health';
-    // }
 
-    // Convert to schema units: cm and kg
     const meta = {
       display_name: fullName,
       age,
       height: heightInches,
       weight: weightLbs,
       sex,
-      fitness_goal: fitnessGoal,
+      fitnessgoal: goal,
       experience: 'beginner'
     };
 
@@ -293,6 +285,5 @@
     window.location.href = 'member.html';
   }
 </script>
-
 </body>
 </html>
