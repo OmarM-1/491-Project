@@ -4,13 +4,11 @@ OPTIMIZED RAG - Fixes 5-20 minute response time issue
 Key optimizations:
 1. Singleton pattern - models load once and stay in memory
 2. Lazy loading - only load what's needed
-3. FAISS index caching - save/load index to disk
 4. Batch processing - process multiple queries efficiently
 5. GPU optimization - proper device placement
 
 Changes made (only):
 - Replace SimpleBM25 (O(N) python loop per query) with rank_bm25 BM25Okapi
-- Cache FAISS using faiss native read/write (instead of pickle)
 - Normalize embeddings + IndexFlatIP (cosine similarity style)
 - Move reranker to correct device + keep embedder/reranker handles on self
 - Cap rerank candidates to avoid growth
@@ -26,7 +24,6 @@ import numpy as np
 
 import torch
 from sentence_transformers import SentenceTransformer, CrossEncoder
-import faiss
 
 # NEW: Faster BM25
 from rank_bm25 import BM25Okapi  # requires: pip install rank-bm25
@@ -397,4 +394,3 @@ if __name__ == "__main__":
     print("\nUse this module by importing:")
     print("  from optimized_rag import generate_grounded_answer")
     print("  answer = generate_grounded_answer('your question')")
-    print("\nNote: FAISS index is cached for instant startup next time!")
