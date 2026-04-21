@@ -47,23 +47,33 @@
     </section>
   </main>
 
+  <script src="https://cdn.jsdelivr.net/npm/markdown-it/dist/markdown-it.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.4/dist/purify.min.js"></script>
+
   <script>
     const textarea = document.getElementById('chat-input');
     const sendButton = document.getElementById('send-button');
     const chatWindow = document.getElementById('chat-window');
 
-    // Auto-resize textarea
+    const md = window.markdownit({
+      breaks: true,
+      linkify: true,
+      html: false
+    });
+
+    function renderMarkdown(text) {
+      return DOMPurify.sanitize(md.render(text || ''));
+    }
+
     textarea.addEventListener('input', () => {
       textarea.style.height = 'auto';
       textarea.style.height = textarea.scrollHeight + 'px';
     });
 
-    // Send on button click
     sendButton.addEventListener('click', () => {
       handleSend();
     });
 
-    // Send on Enter (Shift+Enter gives new line)
     textarea.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
@@ -72,12 +82,22 @@
     });
 
     function appendMessage(role, text) {
-      const msg = document.createElement('div');
-      msg.classList.add('chat-message', role); // role: 'user' or 'assistant'
-      msg.textContent = text;
-      chatWindow.appendChild(msg);
-      chatWindow.scrollTop = chatWindow.scrollHeight;
-    }
+  const row = document.createElement('div');
+  row.className = `chat-row ${role}`;
+
+  const bubble = document.createElement('div');
+  bubble.className = `chat-bubble ${role}`;
+
+  if (role === 'assistant') {
+    bubble.innerHTML = renderMarkdown(text);
+  } else {
+    bubble.textContent = text;
+  }
+
+  row.appendChild(bubble);
+  chatWindow.appendChild(row);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+}
 
     const API_URL = 'http://localhost:8000';
 
@@ -108,13 +128,12 @@
         loadingMsg.remove();
 
         if (data.error) {
-          appendMessage('assistant', `Error: ${data.error}`);
+          appendMessage('assistant', `**Error:** ${data.error}`);
         } else {
           appendMessage('assistant', data.answer);
         }
-
       } catch (err) {
-        loadingMsg.textContent = `Connection error — is the API running? (${err.message})`;
+        loadingMsg.innerHTML = renderMarkdown(`**Connection error** — is the API running?\n\n\`${err.message}\``);
       }
     }
   </script>

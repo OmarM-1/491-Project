@@ -12,10 +12,10 @@ from typing import Dict, Any, Tuple
 import re
 import os
 import os
+from web_api import chat
 from SAFETY_AGENT import safety_gate_agent
 from Spotter_AI import chat_text
 from nutrition import call_calorie_agent, format_calorie_response, call_diet_agent
-
 # Import both RAG systems
 try:
     from optimized_rag import get_rag, generate_grounded_answer
@@ -259,7 +259,7 @@ class HybridOrchestrator:
             )
         )
 
-        ok, warning = safety_gate_agent(query)
+        ok, warning = safety_gate_agent(query, chat)
 
         if not ok:
             from Spotter_AI import build_messages, chat_text
