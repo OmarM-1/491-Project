@@ -4,27 +4,26 @@
   <meta charset="UTF-8">
   <meta http-equiv="X-UA-Compatible" content="IE=edge" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Spotter AI - Guest</title>
+  <title>Spotter AI</title>
   <link rel="stylesheet" href="style.css" />
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons"
         rel="stylesheet">
 </head>
 
 <body class="home-page">
-  <header class="nav">       
-        <a href="home.html" class="logo">SpotterAI</a>  
-                <ul class="nav-links">
-                    <li><a href="profile.html"> Profile </a></li>
-                    <li><a href="saved_meal_plans.html"> Meal plans </a></li>
-                    <li><a href="saved_workouts.html"> Saved Workouts </a></li>
-                </ul>
-        </header>
-  </header>
 
+  <header class="nav">       
+    <a href="home.html" class="logo">SpotterAI</a>  
+    <ul class="nav-links">
+      <li><a href="profile.html"> Profile </a></li>
+      <li><a href="saved_meal_plans.html"> Meal plans </a></li>
+      <li><a href="saved_workouts.html"> Saved Workouts </a></li>
+    </ul>
+  </header>
 
   <main class="page_guest">
     <section class="hero">
-      <h1>(Guest) SpotterAI</h1>
+      <h1>SpotterAI</h1>
       <p>Ask a question about training or nutrition.</p>
 
       <!-- CHAT MESSAGES AREA -->
@@ -82,22 +81,22 @@
     });
 
     function appendMessage(role, text) {
-  const row = document.createElement('div');
-  row.className = `chat-row ${role}`;
+      const row = document.createElement('div');
+      row.className = `chat-row ${role}`;
 
-  const bubble = document.createElement('div');
-  bubble.className = `chat-bubble ${role}`;
+      const bubble = document.createElement('div');
+      bubble.className = `chat-bubble ${role}`;
 
-  if (role === 'assistant') {
-    bubble.innerHTML = renderMarkdown(text);
-  } else {
-    bubble.textContent = text;
-  }
+      if (role === 'assistant') {
+        bubble.innerHTML = renderMarkdown(text);
+      } else {
+        bubble.textContent = text;
+      }
 
-  row.appendChild(bubble);
-  chatWindow.appendChild(row);
-  chatWindow.scrollTop = chatWindow.scrollHeight;
-}
+      row.appendChild(bubble);
+      chatWindow.appendChild(row);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
 
     const API_URL = 'http://localhost:8000';
 
@@ -133,7 +132,9 @@
           appendMessage('assistant', data.answer);
         }
       } catch (err) {
-        loadingMsg.innerHTML = renderMarkdown(`**Connection error** — is the API running?\n\n\`${err.message}\``);
+        loadingMsg.innerHTML = renderMarkdown(
+          `**Connection error** — is the API running?\n\n\`${err.message}\``
+        );
       }
     }
   </script>

@@ -15,7 +15,7 @@
         <a href="home.html" class="logo">SpotterAI</a>  
                 <ul class="nav-links">
                     <li><a href="profile.html"> Profile </a></li>
-                    <li><a href="guest.html"> Guest Chat </a></li>
+                    <li><a href="member.html"> Chat </a></li>
                     <li><a href="saved_workouts.html"> Saved Workouts </a></li>
                 </ul>
         </header>
@@ -28,7 +28,7 @@
         <img src="avatarimg.png" alt="User Avatar" class="avatar">
 
 
-        <h1 class="profile-name">Guest User</h1>
+        <h1 class="profile-name"> User</h1>
         <p class="profile-sub">Training with SpotterAI</p>
 
         <div class="profile-stats">
@@ -60,6 +60,44 @@
     </section>
 
   </main>
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
+  const supabaseUrl = 'https://ezowjohfkxvaajeqilkx.supabase.co';
+  const supabaseAnonKey = 'sb_publishable__ajmqfcEBopf6B-aKLIzuw_XmyvssUq';
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+  async function loadProfile() {
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user) return;
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", userData.user.id)
+      .single();
+
+    // Update name
+    document.querySelector(".profile-name").textContent =
+      profile?.full_name || "User";
+
+    // Update goals
+    document.querySelectorAll(".profile-section")[0]
+      .querySelector(".placeholder").textContent =
+      profile?.goals || "No goals added yet.";
+
+    // Update preferences
+    document.querySelectorAll(".profile-section")[1]
+      .querySelector(".placeholder").textContent =
+      profile?.preferences || "No preferences saved.";
+
+    // Update stats (placeholder for now)
+    document.querySelectorAll(".stat-number")[0].textContent = profile?.workouts || "—";
+    document.querySelectorAll(".stat-number")[1].textContent = profile?.calories || "—";
+    document.querySelectorAll(".stat-number")[2].textContent = profile?.goals ? "1" : "0";
+  }
+
+  loadProfile();
+</script>
 </body>
 </html>

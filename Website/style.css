@@ -1249,3 +1249,18 @@ body {
   border-radius: 10px;
   overflow-x: auto;
 }
+#upload-button {
+  background: #111827;
+  border: 1px solid #2d3748;
+  cursor: pointer;
+  margin-right: 9px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: #e5e7eb;
+  font-weight: 500;
+}
+
+#upload-button img {
+  filter: brightness(1.6);
+  width: 20px;
+}
