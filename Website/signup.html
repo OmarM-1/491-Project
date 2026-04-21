@@ -272,16 +272,9 @@
 
       console.log('Profile payload:', profilePayload);
 
-      // If no trigger exists and you have correct INSERT policy:
       const { error: profileError } = await supabase
         .from('profiles')
-        .insert(profilePayload);
-
-      // If you DO have a trigger that already inserts the row, use this instead:
-      // const { error: profileError } = await supabase
-      //   .from('profiles')
-      //   .update(profilePayload)
-      //   .eq('id', data.user.id);
+        .upsert(profilePayload);
 
       if (profileError) {
         console.error('Profile save error:', profileError);

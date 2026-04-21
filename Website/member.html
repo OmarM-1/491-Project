@@ -46,7 +46,7 @@
 
           <div class="member-profile-row">
             <span>Age</span>
-            <strong id="profile-age">--</strong>
+            <strong id="profile-age">age</strong>
           </div>
 
           <div class="member-profile-row">
@@ -103,7 +103,7 @@
   ></textarea>
 
   <button id="send-button" aria-label="Send">
-    <img src="up-arrow-icon.webp" alt="Send">
+    <img src="up-arrow-icon-10.jpg" alt="Send">
   </button>
 </div>
     </section>
@@ -230,23 +230,25 @@ document.getElementById("mediaInput").addEventListener("change", async () => {
 
       currentProfile = profile;
 
-      setField('profile-name', profile.full_name);
+      console.log('Profile loaded:', profile);
+
+      setField('profile-name', profile.display_name);
       setField('profile-email', currentUser.email);
-      setField('profile-goal', profile.goals);
+      setField('profile-goal', profile.fitness_goal);
       setField('profile-age', profile.age);
       setField('profile-weight', profile.weight ? `${profile.weight} lbs` : '');
       setField('profile-height', profile.height ? `${profile.height} in` : '');
       setField('profile-sex', profile.sex);
 
       document.getElementById('member-heading').textContent =
-        `Welcome back, ${profile.full_name || 'Member'}`;
+        `Welcome back, ${profile.display_name || 'Member'}`;
 
       document.getElementById('member-subtitle').textContent =
-        `Goal: ${profile.goals || 'Not set'}`;
+        `Goal: ${profile.fitness_goal || 'Not set'}`;
 
       appendMessage(
         'assistant',
-        `Hi ${profile.full_name?.split(' ')[0] || 'there'} — I can use your profile to help with workouts, nutrition, and your ${profile.goals || 'fitness'} goal.`
+        `Hi ${profile.display_name?.split(' ')[0] || 'there'} — I can use your profile to help with workouts, nutrition, and your ${profile.fitness_goal || 'fitness'} goal.`
       );
     }
 
