@@ -230,14 +230,11 @@
     // }
 
     // Convert to schema units: cm and kg
-    const heightCm = Math.round(heightInches * 2.54);
-    const weightKg = Math.round(weightLbs * 0.453592 * 10) / 10;
-
     const meta = {
       display_name: fullName,
       age,
-      height_cm: heightCm,
-      weight_kg: weightKg,
+      height: heightInches,
+      weight: weightLbs,
       sex,
       fitness_goal: fitnessGoal,
       experience: 'beginner'
