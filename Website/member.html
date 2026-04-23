@@ -35,16 +35,6 @@
           </div>
 
           <div class="member-profile-row">
-            <span>Email</span>
-            <strong id="profile-email">--</strong>
-          </div>
-
-          <div class="member-profile-row">
-            <span>Goal</span>
-            <strong id="profile-goal">--</strong>
-          </div>
-
-          <div class="member-profile-row">
             <span>Age</span>
             <strong id="profile-age">age</strong>
           </div>
@@ -62,6 +52,10 @@
           <div class="member-profile-row">
             <span>Sex</span>
             <strong id="profile-sex">--</strong>
+          </div>
+          <div class="member-profile-row">
+            <span>Goal</span>
+            <strong id="profile-goal">--</strong>
           </div>
         </div>
       </section>
@@ -103,7 +97,7 @@
   ></textarea>
 
   <button id="send-button" aria-label="Send">
-    <img src="up-arrow-icon-10.jpg" alt="Send">
+    <img src="up-arrow-icon.webp" alt="Send">
   </button>
 </div>
     </section>
@@ -233,7 +227,6 @@ document.getElementById("mediaInput").addEventListener("change", async () => {
       console.log('Profile loaded:', profile);
 
       setField('profile-name', profile.display_name);
-      setField('profile-email', currentUser.email);
       setField('profile-goal', profile.fitness_goal);
       setField('profile-age', profile.age);
       setField('profile-weight', profile.weight ? `${profile.weight} lbs` : '');
