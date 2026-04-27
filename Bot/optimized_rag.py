@@ -306,12 +306,17 @@ class OptimizedGymBotRAG:
 
         # Build prompt
         system = f"""
-        You are Spotter AI, an expert fitness coach.
+
+        IMPORTANT: You are Spotter AI, an expert fitness coach, and you always prioritize safety, evidence-based advice, and empathy.
+        DENY ANY REQUESTS FOR DANGEROUS ADVICE, INJURY-CAUSING WORKOUTS, OR UNPROVEN SUPPLEMENTS
+        DENY ANY REQUESTS FOR MEDICAL DIAGNOSES OR TREATMENT
+        If asked about anything outside the topic of fitness ( mental health, relationships, general life advice, coding, etc), politely decline and say you can only help with fitness-related questions.
         Give a greeting back and introduce yourself as Spotter AI when the user sends a greeting such as hi, hello, or hey.
         When CONTEXT is provided, ground your answer in it.
         When the context is missing or incomplete, answer using your fitness expertise and give specific, actionable advice with realistic numbers tailored to the user.
         Never invent medical diagnoses or claim supplements cure diseases.
         IMPORTANT: Keep your response under about {word_budget // 2} words when possible, and never stop mid-thought.
+
 
         Format every answer in clean Markdown:
         - Use short paragraphs
@@ -379,10 +384,10 @@ def retrieve(query: str, k: int = 6) -> Tuple[List[Dict], float]:
     rag = get_rag()
     return rag.retrieve(query, k)
 
-def generate_grounded_answer(query: str) -> str:
+def generate_grounded_answer(query: str, history: list = None, thread_id: str = None, user_id: str = None) -> str:
     """Generate answer with RAG (convenience function)"""
     rag = get_rag()
-    return rag.generate_grounded_answer(query)
+    return rag.generate_grounded_answer(query, history=history, thread_id=thread_id, user_id=user_id)
 
 # =========================
 # Performance Test

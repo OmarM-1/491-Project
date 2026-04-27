@@ -122,6 +122,31 @@
 
     let currentUser = null;
     let currentProfile = null;
+    let accessToken = null;
+    let threadId = null;
+
+    async function saveMessage(role, content) {
+      if (!currentUser) return;
+      await supabase.from('chat_messages').insert({
+        user_id: currentUser.id,
+        role,
+        content
+      });
+    }
+
+    async function loadChatHistory() {
+      if (!currentUser) return;
+      const { data: messages } = await supabase
+        .from('chat_messages')
+        .select('role, content')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: true });
+
+      if (messages?.length) {
+        chatWindow.innerHTML = '';
+        messages.forEach(({ role, content }) => appendMessage(role, content));
+      }
+    }
 
     function appendMessage(role, text) {
       const row = document.createElement('div');
@@ -230,6 +255,9 @@ document.getElementById("mediaInput").addEventListener("change", async () => {
 
       currentProfile = profile;
 
+      const { data: sessionData } = await supabase.auth.getSession();
+      accessToken = sessionData.session?.access_token ?? null;
+
       console.log('Profile loaded:', profile);
 
       setField('profile-name', profile.display_name);
@@ -246,10 +274,21 @@ document.getElementById("mediaInput").addEventListener("change", async () => {
       document.getElementById('member-subtitle').textContent =
         `Goal: ${profile.fitness_goal || 'Not set'}`;
 
-      appendMessage(
-        'assistant',
-        `Hi ${profile.display_name?.split(' ')[0] || 'there'} — I can use your profile to help with workouts, nutrition, and your ${profile.fitness_goal || 'fitness'} goal.`
-      );
+      const { data: history } = await supabase
+        .from('chat_messages')
+        .select('role, content')
+        .eq('user_id', currentUser.id)
+        .order('created_at', { ascending: true });
+
+      if (history?.length) {
+        chatWindow.innerHTML = '';
+        history.forEach(({ role, content }) => appendMessage(role, content));
+      } else {
+        appendMessage(
+          'assistant',
+          `Hi ${profile.display_name?.split(' ')[0] || 'there'} — I can use your profile to help with workouts, nutrition, and your ${profile.fitness_goal || 'fitness'} goal.`
+        );
+      }
     }
 
     async function handleSend() {
@@ -272,18 +311,15 @@ document.getElementById("mediaInput").addEventListener("change", async () => {
       chatWindow.scrollTop = chatWindow.scrollHeight;
 
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData.session?.access_token;
-
         const res = await fetch('http://localhost:8000/chat', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+            ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {})
           },
           body: JSON.stringify({
             message: question,
-            profile: currentProfile
+            thread_id: threadId
           })
         });
 
@@ -291,6 +327,8 @@ document.getElementById("mediaInput").addEventListener("change", async () => {
 
         const data = await res.json();
         loadingRow.remove();
+
+        if (data.thread_id) threadId = data.thread_id;
 
         if (data.error) {
           appendMessage('assistant', `Error: ${data.error}`);
