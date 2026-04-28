@@ -131,7 +131,7 @@ def _calc_tool(query: str) -> List[str]:
 # Agentic Answer
 # ─────────────────────────────────────────────────────────────
 
-def agentic_answer(agent: AgenticRAGAgent, query: str, k: int = 6) -> str:
+def agentic_answer(agent: AgenticRAGAgent, query: str, k: int = 6, history: list = None, profile: dict = None) -> str:
     """
     Agentic flow:
     1) Run calculator tool — inject any computed facts
@@ -168,4 +168,4 @@ def agentic_answer(agent: AgenticRAGAgent, query: str, k: int = 6) -> str:
         + "\n---\n".join(evidence_blocks)
     )
 
-    return generate_grounded_answer(synthesis_prompt)
+    return generate_grounded_answer(synthesis_prompt, history=history, profile=profile)

@@ -12,7 +12,6 @@ from typing import Dict, Any, Tuple
 import re
 import os
 import os
-from web_api import chat
 from SAFETY_AGENT import safety_gate_agent
 from Spotter_AI import chat_text
 from nutrition import call_calorie_agent, format_calorie_response, call_diet_agent
@@ -236,7 +235,9 @@ class HybridOrchestrator:
     def answer(
         self,
         query: str,
-        return_metadata: bool = False
+        return_metadata: bool = False,
+        history: list = None,
+        profile: dict = None,
     ) -> str | Dict[str, Any]:
         """
         Main entry point - routes and answers query
@@ -251,11 +252,11 @@ class HybridOrchestrator:
             answer string or dict with metadata
         """
 
-        # Safety check
-        ok, warning = safety_gate_agent(query, chat)
+        # Safety check (on user's question only, not history)
+        ok, warning = safety_gate_agent(query, chat_text)
 
         if not ok:
-            from Spotter_AI import build_messages, chat_text
+            from Spotter_AI import build_messages
             import hashlib
 
             system = (
@@ -366,14 +367,14 @@ class HybridOrchestrator:
 
         try:
             if system == "regular":
-                answer = generate_grounded_answer(query)
+                answer = generate_grounded_answer(query, history=history or [], profile=profile)
                 metadata = {
                     'system': 'regular',
                     'complexity_score': ComplexityScorer.score(query),
                 }
             else:  # agentic
                 agent = get_agent(verbose=self.verbose)
-                answer = agentic_answer(agent, query)
+                answer = agentic_answer(agent, query, history=history or [], profile=profile)
                 metadata = {
                     'system': 'agentic',
                     'complexity_score': ComplexityScorer.score(query),
@@ -433,10 +434,10 @@ def get_orchestrator(
         )
     return _ORCHESTRATOR
 
-def smart_answer(query: str, verbose: bool = False) -> str:
+def smart_answer(query: str, verbose: bool = False, history: list = None, profile: dict = None) -> str:
     """Simple interface for hybrid RAG"""
     orchestrator = get_orchestrator(verbose=verbose)
-    return orchestrator.answer(query)
+    return orchestrator.answer(query, history=history or [], profile=profile)
 
 def analyze_query(query: str) -> None:
     """Analyze a query and show routing decision"""

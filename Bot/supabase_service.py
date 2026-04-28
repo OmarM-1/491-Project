@@ -177,13 +177,6 @@ def save_message(
         row["retrieved_context"] = retrieved_context
 
     result = admin.table("messages").insert(row).execute()
-
-    # Bump the thread's message count and updated_at
-    admin.rpc("", {}).execute  # updated_at trigger handles timestamp
-    admin.table("conversation_threads").update(
-        {"message_count": get_message_count(thread_id)}
-    ).eq("id", thread_id).execute()
-
     return result.data[0] if result.data else {}
 
 

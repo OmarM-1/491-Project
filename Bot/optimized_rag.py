@@ -245,26 +245,25 @@ class OptimizedGymBotRAG:
         Retrieve documents using Supabase pgvector + CrossEncoder reranking.
         Returns: (docs, confidence)
         """
-        # 1) Vector similarity in Supabase
+        # 1) Vector similarity in Supabase — fetch k+2 only, no need for 3x
         initial_docs = retrieve_from_supabase(
             query=query,
             embedder=self.embedder,
-            match_count=max(k * 3, 12),
+            match_count=k + 2,
         )
 
         if not initial_docs:
             return [], 0.0
 
-        # 2) Cross-encoder rerank
-        candidates = initial_docs[: max(k * 3, len(initial_docs))]
-        pairs = [[query, d["text"]] for d in candidates]
+        # 2) Cross-encoder rerank on the smaller candidate set
+        pairs = [[query, d["text"]] for d in initial_docs]
         scores = self.reranker.predict(pairs)
 
-        for d, s in zip(candidates, scores):
+        for d, s in zip(initial_docs, scores):
             d["rerank_score"] = float(s)
 
-        candidates.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
-        top_docs = candidates[:k]
+        initial_docs.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
+        top_docs = initial_docs[:k]
 
         # 3) Confidence heuristic from top rerank scores
         top_scores = [d["rerank_score"] for d in top_docs if "rerank_score" in d]
@@ -282,80 +281,78 @@ class OptimizedGymBotRAG:
         history: list = None,
         thread_id: str = None,
         user_id: str = None,
+        context_block: str = "",
+        profile: dict = None,
     ) -> str:
         """End-to-end generation with RAG"""
         try:
-            from Spotter_AI import chat_text, build_messages
+            from Spotter_AI import chat_text
         except ImportError:
             raise ImportError("Spotter_AI not available")
 
         # Token budget: ~0.75 words per token, leave 20% headroom
         word_budget = int(max_new_tokens * 0.75 * 0.8)
 
-        # Retrieve context
+        # Retrieve docs using only the user's actual question (clean embedding)
         docs, confidence = self.retrieve(query, k=6)
 
         if not docs:
-            context = "(No relevant information found)"
+            rag_context = ""
             confidence = 0.0
         else:
-            context = "\n\n".join(
+            rag_context = "\n\n".join(
                 f"[{i+1}] {doc['text']}"
                 for i, doc in enumerate(docs)
             )[:2000]
 
-        # Build prompt
-        system = f"""
+        # Build profile block (placed at TOP of system prompt — small models follow early context best)
+        profile_block = ""
+        if profile:
+            parts = []
+            if profile.get("display_name"):
+                parts.append(f"Name: {profile['display_name']}")
+            if profile.get("age"):
+                parts.append(f"Age: {profile['age']}")
+            if profile.get("sex"):
+                parts.append(f"Sex: {profile['sex']}")
+            if profile.get("weight"):
+                parts.append(f"Weight: {profile['weight']} lbs")
+            if profile.get("height"):
+                parts.append(f"Height: {profile['height']} in")
+            if profile.get("fitness_goal"):
+                parts.append(f"Fitness goal: {profile['fitness_goal']}")
+            if parts:
+                profile_block = "USER PROFILE:\n" + "\n".join(parts) + "\n\n"
 
-        IMPORTANT: You are Spotter AI, an expert fitness coach, and you always prioritize safety, evidence-based advice, and empathy.
-        DENY ANY REQUESTS FOR DANGEROUS ADVICE, INJURY-CAUSING WORKOUTS, OR UNPROVEN SUPPLEMENTS
-        DENY ANY REQUESTS FOR MEDICAL DIAGNOSES OR TREATMENT
-        If asked about anything outside the topic of fitness ( mental health, relationships, general life advice, coding, etc), politely decline and say you can only help with fitness-related questions.
-        Give a greeting back and introduce yourself as Spotter AI when the user sends a greeting such as hi, hello, or hey.
-        When CONTEXT is provided, ground your answer in it.
-        When the context is missing or incomplete, answer using your fitness expertise and give specific, actionable advice with realistic numbers tailored to the user.
-        Never invent medical diagnoses or claim supplements cure diseases.
-        IMPORTANT: Keep your response under about {word_budget // 2} words when possible, and never stop mid-thought.
+        # RAG context goes in the system prompt — keeps the user message clean
+        rag_block = ""
+        if rag_context:
+            rag_block = f"\n\nRELEVANT FITNESS KNOWLEDGE (cite with [1],[2] etc. when used):\n{rag_context}"
 
+        system = (
+            f"{profile_block}"
+            f"You are Spotter AI, an expert fitness coach. "
+            f"Use the user's profile above to give personalized advice. "
+            f"Deny dangerous advice, unproven supplements, and medical diagnoses. "
+            f"If asked about anything unrelated to fitness, politely decline. "
+            f"Greet the user by name when they say hi/hello. "
+            f"Keep responses under {word_budget // 2} words. "
+            f"Be precise about exercise equipment: only mention equipment that is genuinely required for the exercise. "
+            f"Bodyweight exercises (push-ups, planks, lunges, etc.) require NO equipment — never add barbells or dumbbells to them. "
+            f"Format answers in Markdown: bullets for tips, **bold** for exercises, ## for headings."
+            f"{rag_block}"
+        )
 
-        Format every answer in clean Markdown:
-        - Use short paragraphs
-        - Use bullet points for workouts, meals, and tips
-        - Use numbered lists for step-by-step instructions
-        - Use **bold** for exercise names and key advice
-        - Use ## section headings when helpful
-        - Keep answers concise and scannable
-        - Do not output raw HTML
-        """.strip()
-        
-        # Build conversation memory block (sliding window)
-        memory_block = ""
-        if history or thread_id:
-            from memory_manager import build_context_block
-            memory_block = build_context_block(
-                thread_id=thread_id,
-                user_id=user_id,
-                history=history or [],
-            )
+        # Build multi-turn messages: system → last 4 history turns → current question
+        messages = [{"role": "system", "content": system}]
 
-        history_section = f"\n\n{memory_block}" if memory_block else ""
+        for turn in (history or [])[-4:]:
+            role = turn.get("role", "user")
+            content = turn.get("content", "")
+            if role in ("user", "assistant") and content:
+                messages.append({"role": role, "content": content})
 
-        if not docs:
-            user = (
-                f"QUESTION:\n{query}"
-                f"{history_section}\n\n"
-                f"No context was retrieved. Answer from your general fitness expertise."
-            )
-        else:
-            user = (
-                f"QUESTION:\n{query}"
-                f"{history_section}\n\n"
-                f"CONTEXT:\n{context}\n\n"
-                f"Use the context where relevant, cite with [1], [2], etc., "
-                f"and supplement with your expertise if the context is incomplete."
-            )
-
-        messages = build_messages(system, user)
+        messages.append({"role": "user", "content": query})
 
         temperature = 0.4 if confidence >= 0.6 else 0.5
         return chat_text(
@@ -384,10 +381,10 @@ def retrieve(query: str, k: int = 6) -> Tuple[List[Dict], float]:
     rag = get_rag()
     return rag.retrieve(query, k)
 
-def generate_grounded_answer(query: str, history: list = None, thread_id: str = None, user_id: str = None) -> str:
+def generate_grounded_answer(query: str, history: list = None, thread_id: str = None, user_id: str = None, profile: dict = None) -> str:
     """Generate answer with RAG (convenience function)"""
     rag = get_rag()
-    return rag.generate_grounded_answer(query, history=history, thread_id=thread_id, user_id=user_id)
+    return rag.generate_grounded_answer(query, history=history, thread_id=thread_id, user_id=user_id, profile=profile)
 
 # =========================
 # Performance Test

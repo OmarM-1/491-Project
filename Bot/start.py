@@ -200,7 +200,7 @@ def preload_ai_systems() -> dict:
 
 def build_app(hw_config: dict, db_status: dict, ai_status: dict):
     """Construct the FastAPI application with all routes."""
-    from fastapi import FastAPI, File, Form, UploadFile, Depends
+    from fastapi import FastAPI, File, Form, UploadFile, Depends, Request
     from fastapi.middleware.cors import CORSMiddleware
     from fastapi.responses import JSONResponse
     from pydantic import BaseModel
@@ -368,7 +368,7 @@ def build_app(hw_config: dict, db_status: dict, ai_status: dict):
         thread_id: str | None = None
 
     @app.post("/chat")
-    async def chat(req: ChatRequest):
+    async def chat(req: ChatRequest, request: Request):
         t0 = time.time()
 
         if not req.message.strip():
@@ -377,12 +377,73 @@ def build_app(hw_config: dict, db_status: dict, ai_status: dict):
                 status_code=400,
             )
 
+        # --- Auth (optional — works for guests too) ---
+        user_id = None
+        thread_id = req.thread_id
+        profile = None
+        history = []
+
+        if db_status.get("connected"):
+            from supabase_client import get_user_from_token
+            from supabase_service import (
+                get_profile,
+                create_thread,
+                get_or_create_thread,
+                get_history_for_context,
+                save_message,
+            )
+
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                token = auth_header.split(" ", 1)[1]
+                try:
+                    user_obj = get_user_from_token(token)
+                    if user_obj:
+                        user_id = user_obj.id
+                except Exception:
+                    pass
+
+            if user_id:
+                # Get or create thread, auto-title from first message
+                if thread_id:
+                    thread = get_or_create_thread(user_id, thread_id)
+                else:
+                    title = req.message[:60] + ("…" if len(req.message) > 60 else "")
+                    thread = create_thread(user_id, title=title)
+                thread_id = thread["id"]
+
+                # Load profile and history in parallel, then save user message
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as ex:
+                    f_profile = ex.submit(get_profile, user_id)
+                    f_history = ex.submit(get_history_for_context, thread_id, 8)
+                    profile = f_profile.result()
+                    history = f_history.result()
+
+                save_message(thread_id, role="user", content=req.message)
+
         try:
             from hybrid_orchestrator import get_orchestrator
             orchestrator = get_orchestrator()
-            result = orchestrator.answer(req.message, return_metadata=True)
+            result = orchestrator.answer(
+                req.message,
+                return_metadata=True,
+                history=history,
+                profile=profile,
+            )
 
             answer = result.get("answer", "")
+
+            # Save assistant response in background — don't block the reply
+            if db_status.get("connected") and thread_id and user_id:
+                import threading
+                threading.Thread(
+                    target=save_message,
+                    args=(thread_id,),
+                    kwargs={"role": "assistant", "content": answer},
+                    daemon=True,
+                ).start()
+
             meta = {
                 "system": result.get("system", "rag"),
                 "complexity_score": result.get("complexity_score"),
@@ -391,7 +452,7 @@ def build_app(hw_config: dict, db_status: dict, ai_status: dict):
                 "time_seconds": round(time.time() - t0, 2),
             }
 
-            return {"success": True, "answer": answer, "thread_id": req.thread_id, "meta": meta}
+            return {"success": True, "answer": answer, "thread_id": thread_id, "meta": meta}
 
         except Exception as e:
             logger.exception("Chat endpoint error")
@@ -525,7 +586,18 @@ def build_app(hw_config: dict, db_status: dict, ai_status: dict):
 
         @app.get("/threads")
         async def threads_list(user=Depends(get_current_user)):
-            return list_threads(user.id)
+            return {"threads": list_threads(user.id)}
+
+        @app.get("/threads/latest")
+        async def threads_latest(user=Depends(get_current_user)):
+            threads = list_threads(user.id, limit=1)
+            return {"thread_id": threads[0]["id"] if threads else None}
+
+        @app.get("/history/{thread_id}")
+        async def thread_history(thread_id: str, user=Depends(get_current_user)):
+            from supabase_service import get_history_for_context
+            messages = get_history_for_context(thread_id, max_messages=50)
+            return {"messages": messages}
 
         @app.get("/threads/{thread_id}/messages")
         async def thread_messages(thread_id: str, user=Depends(get_current_user)):

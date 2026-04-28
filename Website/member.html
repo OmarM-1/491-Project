@@ -7,6 +7,8 @@
   <title>Spotter AI - Member</title>
   <link rel="stylesheet" href="style.css" />
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
 </head>
 
 <body class="home-page">
@@ -68,6 +70,16 @@
           <button class="member-prompt-btn" data-prompt="Give me a simple weekly plan based on my profile.">Weekly plan</button>
         </div>
       </section>
+
+      <section class="member-profile-card">
+        <div class="conversations-header">
+          <p class="member-label">Conversations</p>
+          <button id="new-chat-btn" class="new-chat-btn" title="New conversation">+ New</button>
+        </div>
+        <div id="conversations-list" class="conversations-list">
+          <p class="conversations-empty">No conversations yet.</p>
+        </div>
+      </section>
     </aside>
 
     <section class="member-chat-area">
@@ -117,26 +129,83 @@
     let currentUser = null;
     let currentProfile = null;
     let accessToken = null;
-    let threadId = null;
+    let threadId = localStorage.getItem('spotter_thread_id') || null;
 
-    async function saveMessage(role, content) {
-      if (!currentUser) return;
-      await supabase.from('chat_messages').insert({
-        user_id: currentUser.id,
-        role,
-        content
+    // ── Conversation list ────────────────────────────────────────
+
+    async function loadConversationList() {
+      if (!accessToken) return;
+      const res = await fetch('http://localhost:8000/threads', {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      const data = await res.json();
+      renderConversationList(data.threads || []);
+    }
+
+    function renderConversationList(threads) {
+      const list = document.getElementById('conversations-list');
+      if (!threads.length) {
+        list.innerHTML = '<p class="conversations-empty">No conversations yet.</p>';
+        return;
+      }
+      list.innerHTML = threads.map(t => {
+        const label = t.title || 'New conversation';
+        const active = t.id === threadId ? ' active' : '';
+        return `<button class="conversation-item${active}" data-id="${t.id}" title="${label}">${label}</button>`;
+      }).join('');
+
+      list.querySelectorAll('.conversation-item').forEach(btn => {
+        btn.addEventListener('click', () => switchConversation(btn.dataset.id));
       });
     }
 
-    async function loadChatHistory() {
-      if (!currentUser) return;
-      const { data: messages } = await supabase
-        .from('chat_messages')
-        .select('role, content')
-        .eq('user_id', currentUser.id)
-        .order('created_at', { ascending: true });
+    async function switchConversation(id) {
+      threadId = id;
+      localStorage.setItem('spotter_thread_id', threadId);
+      chatWindow.innerHTML = '';
+      await loadChatHistory();
+      // Re-render list to update active highlight
+      await loadConversationList();
+    }
 
-      if (messages?.length) {
+    function startNewConversation() {
+      threadId = null;
+      localStorage.removeItem('spotter_thread_id');
+      chatWindow.innerHTML = '';
+      appendMessage(
+        'assistant',
+        `Hi ${currentProfile?.display_name?.split(' ')[0] || 'there'} — starting a new conversation. What can I help you with?`
+      );
+      // Re-render list (no active item)
+      loadConversationList();
+    }
+
+    // ── History loader ───────────────────────────────────────────
+
+    async function loadChatHistory() {
+      if (!accessToken) return;
+
+      // If no stored thread, ask the backend for the latest one
+      if (!threadId) {
+        const res = await fetch('http://localhost:8000/threads/latest', {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        const data = await res.json();
+        if (data.thread_id) {
+          threadId = data.thread_id;
+          localStorage.setItem('spotter_thread_id', threadId);
+        }
+      }
+
+      if (!threadId) return;
+
+      const res = await fetch(`http://localhost:8000/history/${threadId}`, {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      const data = await res.json();
+      const messages = data.messages || [];
+
+      if (messages.length) {
         chatWindow.innerHTML = '';
         messages.forEach(({ role, content }) => appendMessage(role, content));
       }
@@ -148,7 +217,13 @@
 
       const bubble = document.createElement('div');
       bubble.classList.add('chat-bubble', role);
-      bubble.textContent = text;
+
+      if (role === 'assistant') {
+        // Render markdown and sanitize to prevent XSS
+        bubble.innerHTML = DOMPurify.sanitize(marked.parse(text));
+      } else {
+        bubble.textContent = text;
+      }
 
       row.appendChild(bubble);
       chatWindow.appendChild(row);
@@ -267,21 +342,17 @@ document.getElementById("mediaInput").addEventListener("change", async () => {
       document.getElementById('member-subtitle').textContent =
         `Goal: ${profile.fitness_goal || 'Not set'}`;
 
-      const { data: history } = await supabase
-        .from('chat_messages')
-        .select('role, content')
-        .eq('user_id', currentUser.id)
-        .order('created_at', { ascending: true });
+      await loadChatHistory();
+      await loadConversationList();
 
-      if (history?.length) {
-        chatWindow.innerHTML = '';
-        history.forEach(({ role, content }) => appendMessage(role, content));
-      } else {
+      if (!chatWindow.querySelector('.chat-message-row')) {
         appendMessage(
           'assistant',
           `Hi ${profile.display_name?.split(' ')[0] || 'there'} — I can use your profile to help with workouts, nutrition, and your ${profile.fitness_goal || 'fitness'} goal.`
         );
       }
+
+      document.getElementById('new-chat-btn').addEventListener('click', startNewConversation);
     }
 
     async function handleSend() {
@@ -321,7 +392,12 @@ document.getElementById("mediaInput").addEventListener("change", async () => {
         const data = await res.json();
         loadingRow.remove();
 
-        if (data.thread_id) threadId = data.thread_id;
+        if (data.thread_id) {
+          const isNew = threadId !== data.thread_id;
+          threadId = data.thread_id;
+          localStorage.setItem('spotter_thread_id', threadId);
+          if (isNew) loadConversationList(); // new thread created — refresh list
+        }
 
         if (data.error) {
           appendMessage('assistant', `Error: ${data.error}`);
@@ -334,6 +410,7 @@ document.getElementById("mediaInput").addEventListener("change", async () => {
     }
 
     document.getElementById('logout-btn')?.addEventListener('click', async () => {
+      localStorage.removeItem('spotter_thread_id');
       await supabase.auth.signOut();
       window.location.href = 'login.html';
     });

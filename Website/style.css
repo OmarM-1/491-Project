@@ -1264,3 +1264,87 @@ body {
   filter: brightness(1.6);
   width: 20px;
 }
+
+/* ── Markdown inside assistant bubbles ─────────────────────── */
+
+.chat-bubble.assistant p { margin: 0 0 0.5rem; }
+.chat-bubble.assistant p:last-child { margin-bottom: 0; }
+.chat-bubble.assistant h2,
+.chat-bubble.assistant h3 { margin: 0.75rem 0 0.35rem; font-size: 1rem; }
+.chat-bubble.assistant ul,
+.chat-bubble.assistant ol { margin: 0.25rem 0 0.5rem 1.25rem; padding: 0; }
+.chat-bubble.assistant li { margin-bottom: 0.2rem; }
+.chat-bubble.assistant strong { font-weight: 700; }
+.chat-bubble.assistant code {
+  background: rgba(255,255,255,0.1);
+  border-radius: 4px;
+  padding: 0.1em 0.35em;
+  font-size: 0.88em;
+}
+
+/* ── Conversation list ─────────────────────────────────────── */
+
+.conversations-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.new-chat-btn {
+  background: rgba(34, 48, 238, 0.18);
+  border: 1px solid rgba(34, 48, 238, 0.35);
+  color: var(--text-main);
+  border-radius: 8px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.new-chat-btn:hover {
+  background: rgba(34, 48, 238, 0.35);
+}
+
+.conversations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.conversations-empty {
+  font-size: 0.82rem;
+  color: var(--text-soft);
+  text-align: center;
+  padding: 0.5rem 0;
+}
+
+.conversation-item {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-soft);
+  font-size: 0.83rem;
+  text-align: left;
+  padding: 0.45rem 0.65rem;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  width: 100%;
+}
+
+.conversation-item:hover {
+  background: rgba(34, 48, 238, 0.12);
+  color: var(--text-main);
+  border-color: rgba(34, 48, 238, 0.25);
+}
+
+.conversation-item.active {
+  background: rgba(34, 48, 238, 0.2);
+  color: var(--text-main);
+  border-color: rgba(34, 48, 238, 0.4);
+}
