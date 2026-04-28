@@ -1262,7 +1262,9 @@ body {
 
 #upload-button img {
   filter: brightness(1.6);
-  width: 20px;
+  height: 100%;
+  width: auto;
+  filter: invert(100%);
 }
 
 /* ── Markdown inside assistant bubbles ─────────────────────── */
