@@ -50,108 +50,231 @@
         </div>
       </div>
 
-      <div class="profile-section">
-        <h2>Fitness Goals</h2>
-        <span>Goal: </span>
-        <strong id="profile-goal">--</strong>
-      </div>
+    <div class="profile-section">
+  <div class="profile-section-header">
+      <h2>Fitness Goals</h2>
+    </div>
+
+    <div class="member-profile-row">
+      <span>Goal</span>
+      <strong id="profile-goal-text">--</strong>
+        <select id="profile-goal-select" style="display:none;">
+          <option value="">Select</option>
+          <option value="lose weight">Lose Weight</option>
+          <option value="build muscle">Build Muscle</option>
+          <option value="maintain weight">Maintain Weight</option>
+          <option value="improve fitness">Improve Fitness</option>
+          <option value="eat healthier">Eat Healthier</option>
+          <option value="flexibility">Flexibility</option>
+          <option value="general health">General Health</option>
+        </select>
+    </div>
+  </div>
 
       <div class="profile-section">
-        <h2>Preferences</h2>
+        <div class="profile-section-header">
+          <h2>Preferences</h2>
+          <button id="edit-profile-btn" class="member-logout-btn" type="button">
+            Edit
+          </button>
+        </div>
+
         <div class="member-profile-list">
           <div class="member-profile-row">
             <span>Name</span>
-            <strong id="profile-name">--</strong>
+            <strong id="profile-name-text">--</strong>
+            <input id="profile-name-input" type="text" style="display:none;" />
           </div>
 
           <div class="member-profile-row">
             <span>Age</span>
-            <strong id="profile-age">--</strong>
+            <strong id="profile-age-text">--</strong>
+            <input id="profile-age-input" type="number" style="display:none;" />
           </div>
 
           <div class="member-profile-row">
             <span>Weight</span>
-            <strong id="profile-weight">--</strong>
+            <strong id="profile-weight-text">--</strong>
+            <input id="profile-weight-input" type="number" style="display:none;" />
           </div>
 
           <div class="member-profile-row">
             <span>Height</span>
-            <strong id="profile-height">--</strong>
+            <strong id="profile-height-text">--</strong>
+            <input id="profile-height-input" type="number" style="display:none;" />
           </div>
 
           <div class="member-profile-row">
             <span>Sex</span>
-            <strong id="profile-sex">--</strong>
+            <strong id="profile-sex-text">--</strong>
+            <select id="profile-sex-input" style="display:none;">
+              <option value="">Select</option>
+              <option value="male">Male</option>
+              <option value="female">Female</option>
+              <option value="other">Other</option>
+            </select>
           </div>
         </div>
       </div>
-
     </section>
   </main>
+<script type="module">
+  import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
-  <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+  const supabaseUrl = 'https://ezowjohfkxvaajeqilkx.supabase.co';
+  const supabaseAnonKey = 'sb_publishable__ajmqfcEBopf6B-aKLIzuw_XmyvssUq';
+  const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
-    const supabaseUrl = 'https://ezowjohfkxvaajeqilkx.supabase.co';
-    const supabaseAnonKey = 'sb_publishable__ajmqfcEBopf6B-aKLIzuw_XmyvssUq';
-    const supabase = createClient(supabaseUrl, supabaseAnonKey);
+  let currentUserId = null;
+  let isEditing = false;
 
-    async function loadProfile() {
-      try {
-        const { data: userData, error: userError } = await supabase.auth.getUser();
+  function setDisplayValue(id, value, suffix = '') {
+    document.getElementById(id).textContent =
+      value !== null && value !== undefined && value !== ''
+        ? `${value}${suffix}`
+        : '--';
+  }
 
-        if (userError || !userData?.user) {
-          window.location.href = 'login.html';
-          return;
-        }
+  function setInputValue(id, value) {
+    document.getElementById(id).value =
+      value !== null && value !== undefined ? value : '';
+  }
 
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', userData.user.id)
-          .single();
+  function toggleEditMode(editing) {
+    isEditing = editing;
 
-        if (profileError || !profile) {
-          console.error('Error loading profile:', profileError);
-          return;
-        }
+    const button = document.getElementById('edit-profile-btn');
+    button.textContent = editing ? 'Save' : 'Edit';
 
-        // Main card name
-        document.querySelector('.profile-name').textContent =
-          profile.full_name || profile.display_name || 'User';
+    const fields = [
+      ['profile-goal-text', 'profile-goal-select'],
+      ['profile-name-text', 'profile-name-input'],
+      ['profile-age-text', 'profile-age-input'],
+      ['profile-weight-text', 'profile-weight-input'],
+      ['profile-height-text', 'profile-height-input'],
+      ['profile-sex-text', 'profile-sex-input']
+    ];
 
-        // Goal
-        document.getElementById('profile-goal').textContent =
-          profile.goals || profile.fitness_goal || 'No goals added yet.';
+    fields.forEach(([textId, inputId]) => {
+      document.getElementById(textId).style.display = editing ? 'none' : 'inline';
+      document.getElementById(inputId).style.display = editing ? 'inline-block' : 'none';
+    });
+  }
 
-        // Preferences
-        document.getElementById('profile-name').textContent =
-          profile.full_name || profile.display_name || '--';
+  async function loadProfile() {
+    try {
+      const { data: userData, error: userError } = await supabase.auth.getUser();
 
-        document.getElementById('profile-age').textContent =
-          profile.age || '--';
-
-        document.getElementById('profile-weight').textContent =
-          profile.weight ? `${profile.weight} lbs` : '--';
-
-        document.getElementById('profile-height').textContent =
-          profile.height ? `${profile.height} in` : '--';
-
-        document.getElementById('profile-sex').textContent =
-          profile.sex || '--';
-
-        // Stats
-        const statNumbers = document.querySelectorAll('.stat-number');
-        statNumbers[0].textContent = profile.workouts || '—';
-        statNumbers[1].textContent = profile.calories || '—';
-        statNumbers[2].textContent =
-          (profile.goals || profile.fitness_goal) ? '1' : '0';
-      } catch (error) {
-        console.error('Unexpected error loading profile:', error);
+      if (userError || !userData?.user) {
+        window.location.href = 'login.html';
+        return;
       }
-    }
 
-    loadProfile();
-  </script>
+      currentUserId = userData.user.id;
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', currentUserId)
+        .single();
+
+      if (profileError || !profile) {
+        console.error('Error loading profile:', profileError);
+        return;
+      }
+
+      document.querySelector('.profile-name').textContent =
+        profile.full_name || profile.display_name || 'User';
+
+      setDisplayValue('profile-goal-text', profile.goals || profile.fitness_goal);
+      setInputValue('profile-goal-select', profile.goals || profile.fitness_goal);
+
+      setDisplayValue('profile-name-text', profile.full_name || profile.display_name);
+      setDisplayValue('profile-age-text', profile.age);
+      setDisplayValue('profile-weight-text', profile.weight, ' lbs');
+      setDisplayValue('profile-height-text', profile.height, ' in');
+      setDisplayValue('profile-sex-text', profile.sex);
+
+      setInputValue('profile-name-input', profile.full_name || profile.display_name);
+      setInputValue('profile-age-input', profile.age);
+      setInputValue('profile-weight-input', profile.weight);
+      setInputValue('profile-height-input', profile.height);
+      setInputValue('profile-sex-input', profile.sex);
+
+      const statNumbers = document.querySelectorAll('.stat-number');
+      statNumbers[0].textContent = profile.workouts || '—';
+      statNumbers[1].textContent = profile.calories || '—';
+      statNumbers[2].textContent =
+        (profile.goals || profile.fitness_goal) ? '1' : '0';
+
+      toggleEditMode(false);
+    } catch (error) {
+      console.error('Unexpected error loading profile:', error);
+    }
+  }
+
+  async function saveProfile() {
+  if (!currentUserId) {
+    alert('No logged-in user found.');
+    return;
+  }
+
+  const fitness_goal = document.getElementById('profile-goal-select').value.trim();
+  const display_name = document.getElementById('profile-name-input').value.trim();
+  const age = document.getElementById('profile-age-input').value;
+  const weight = document.getElementById('profile-weight-input').value;
+  const height = document.getElementById('profile-height-input').value;
+  const sex = document.getElementById('profile-sex-input').value;
+
+  const updates = {
+    fitness_goal: fitness_goal || null,
+    display_name: display_name || null,
+    age: age ? Number(age) : null,
+    weight: weight ? Number(weight) : null,
+    height: height ? Number(height) : null,
+    sex: sex || null
+  };
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .update(updates)
+    .eq('id', currentUserId)
+    .select();
+
+  console.log('save data:', data);
+  console.log('save error:', error);
+
+  if (error) {
+    alert(`Could not save changes: ${error.message}`);
+    return;
+  }
+
+  document.querySelector('.profile-name').textContent = display_name || 'User';
+  document.getElementById('profile-goal-text').textContent = fitness_goal || '--';
+  document.getElementById('profile-name-text').textContent = display_name || '--';
+  document.getElementById('profile-age-text').textContent = updates.age ?? '--';
+  document.getElementById('profile-weight-text').textContent =
+    updates.weight != null ? `${updates.weight} lbs` : '--';
+  document.getElementById('profile-height-text').textContent =
+    updates.height != null ? `${updates.height} in` : '--';
+  document.getElementById('profile-sex-text').textContent = updates.sex || '--';
+
+  const statNumbers = document.querySelectorAll('.stat-number');
+  statNumbers[2].textContent = fitness_goal ? '1' : '0';
+
+  toggleEditMode(false);
+  alert('Profile updated successfully.');
+}
+
+  document.getElementById('edit-profile-btn').addEventListener('click', async () => {
+    if (!isEditing) {
+      toggleEditMode(true);
+    } else {
+      await saveProfile();
+    }
+  });
+
+  loadProfile();
+</script>
 </body>
 </html>
