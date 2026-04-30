@@ -34,7 +34,7 @@ rank-bm25
 
 # Note: Adjust versions based on your CUDA version
 #  For CUDA 12.1: 
-torch==2.1.0+cu121
+torch==2.9.0
 opencv-python
 fastapi
 uvicorn
