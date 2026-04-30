@@ -113,6 +113,7 @@ body {
 .page {
     position: relative;
     width: 100%;
+    min-height: 120vh;
     height: 100vh;
     padding: 0 7vw;
     display: flex;
@@ -1262,7 +1263,9 @@ body {
 
 #upload-button img {
   filter: brightness(1.6);
-  width: 20px;
+  height: 100%;
+  width: auto;
+  filter: invert(100%);
 }
 
 /* ── Markdown inside assistant bubbles ─────────────────────── */
@@ -1347,4 +1350,35 @@ body {
   background: rgba(34, 48, 238, 0.2);
   color: var(--text-main);
   border-color: rgba(34, 48, 238, 0.4);
+}
+
+.profile-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.member-profile-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.member-profile-row input,
+.member-profile-row select {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid #374151;
+  background: #111827;
+  color: #e5e7eb;
+  min-width: 140px;
+}
+#edit-profile-btn {
+  padding: 8px 16px;   /* controls size */
+  font-size: 14px;     /* text size */
+  width: auto;        /* fit to content */
+  border-radius: 6px;  /* rounded corners */
 }
