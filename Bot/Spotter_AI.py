@@ -9,7 +9,7 @@ import os
 # ─────────────────────────────────────────────
 # MODEL CONFIG
 # ─────────────────────────────────────────────
-MODEL_ID = os.environ.get("SPOTTER_MODEL", "Qwen/Qwen2-VL-2B-Instruct")
+MODEL_ID = os.environ.get("SPOTTER_MODEL", "Qwen/Qwen2-VL-7B-Instruct")
 
 # Pick the right model class based on which model is being loaded
 # Qwen2-VL-*   → Qwen2VLForConditionalGeneration
