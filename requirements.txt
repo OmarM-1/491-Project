@@ -41,3 +41,8 @@ uvicorn
 python-multipart
 supabase
 python-dotenv
+pydantic
+anyio
+opencv-python-headless
+Pillow
+requests
