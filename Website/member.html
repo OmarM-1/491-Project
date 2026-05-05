@@ -99,12 +99,20 @@
     <img src="paperclip-icon.png" alt="Upload" style="width:22px;">
   </button>
 
-  <textarea
-    class="chat-input"
-    id="chat-input"
-    placeholder="Ask a personalized question..."
-    rows="1"
-  ></textarea>
+  <div style="flex:1;display:flex;flex-direction:column;gap:6px;min-width:0;">
+    <div id="attachment-preview" style="display:none;align-items:center;gap:8px;padding:6px 10px;background:rgba(255,255,255,0.08);border-radius:10px;font-size:0.8rem;">
+      <span id="attachment-thumb" style="flex-shrink:0;"></span>
+      <span id="attachment-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;opacity:0.85;"></span>
+      <button id="attachment-remove" aria-label="Remove attachment" style="background:none;border:none;cursor:pointer;opacity:0.6;font-size:1rem;padding:0;line-height:1;flex-shrink:0;">✕</button>
+    </div>
+
+    <textarea
+      class="chat-input"
+      id="chat-input"
+      placeholder="Ask a personalized question..."
+      rows="1"
+    ></textarea>
+  </div>
 
   <button id="send-button" aria-label="Send">
     <img src="up-arrow-icon.webp" alt="Send">
@@ -254,49 +262,49 @@
       });
     });
 
-    // When upload button is clicked, open file picker
-document.getElementById("upload-button").addEventListener("click", () => {
-  document.getElementById("mediaInput").click();
-});
+    // ── Staged attachment ────────────────────────────────────────
+    let stagedFile = null;
+    let stagedObjectURL = null;
 
-document.getElementById("mediaInput").addEventListener("change", async () => {
-  const file = document.getElementById("mediaInput").files[0];
-  if (!file) return;
+    function clearStagedFile() {
+      stagedFile = null;
+      if (stagedObjectURL) { URL.revokeObjectURL(stagedObjectURL); stagedObjectURL = null; }
+      document.getElementById("mediaInput").value = "";
+      document.getElementById("attachment-preview").style.display = "none";
+      document.getElementById("attachment-thumb").innerHTML = "";
+      document.getElementById("attachment-name").textContent = "";
+    }
 
-  appendMessage("user", `📎 Uploaded: ${file.name}`);
-
-  const formData = new FormData();
-  formData.append("file", file);
-
-  const loadingRow = document.createElement("div");
-  loadingRow.classList.add("chat-message-row", "assistant");
-
-  const loadingBubble = document.createElement("div");
-  loadingBubble.classList.add("chat-bubble", "assistant");
-  loadingBubble.textContent = "Analyzing file...";
-
-  loadingRow.appendChild(loadingBubble);
-  chatWindow.appendChild(loadingRow);
-  chatWindow.scrollTop = chatWindow.scrollHeight;
-
-  try {
-    const res = await fetch("http://localhost:8000/chat-with-media", {
-      method: "POST",
-      body: formData
+    document.getElementById("upload-button").addEventListener("click", () => {
+      document.getElementById("mediaInput").click();
     });
 
-    const data = await res.json();
-    loadingRow.remove();
+    document.getElementById("mediaInput").addEventListener("change", () => {
+      const file = document.getElementById("mediaInput").files[0];
+      if (!file) return;
 
-    if (data.error) {
-      appendMessage("assistant", `Error: ${data.error}`);
-    } else {
-      appendMessage("assistant", data.answer);
-    }
-  } catch (err) {
-    loadingBubble.textContent = `Connection error — ${err.message}`;
-  }
-});
+      clearStagedFile();
+      stagedFile = file;
+      stagedObjectURL = URL.createObjectURL(file);
+
+      // Show preview chip in the input bar
+      const thumb = document.getElementById("attachment-thumb");
+      if (file.type.startsWith("video/")) {
+        thumb.innerHTML = `<span style="font-size:1.2rem;">🎬</span>`;
+      } else {
+        thumb.innerHTML = `<img src="${stagedObjectURL}" style="width:32px;height:32px;object-fit:cover;border-radius:6px;">`;
+      }
+      document.getElementById("attachment-name").textContent = file.name;
+      document.getElementById("attachment-preview").style.display = "flex";
+
+      textarea.placeholder = "Describe what you want feedback on...";
+      textarea.focus();
+    });
+
+    document.getElementById("attachment-remove").addEventListener("click", () => {
+      clearStagedFile();
+      textarea.placeholder = "Ask a personalized question...";
+    });
 
 
     async function loadMemberProfile() {
@@ -355,55 +363,119 @@ document.getElementById("mediaInput").addEventListener("change", async () => {
 
     async function handleSend() {
       const question = textarea.value.trim();
-      if (!question || !currentProfile) return;
+      if (!currentProfile) return;
+      if (!question && !stagedFile) return;
 
-      appendMessage('user', question);
       textarea.value = '';
       textarea.style.height = 'auto';
+      textarea.placeholder = 'Ask a personalized question...';
 
       const loadingRow = document.createElement('div');
       loadingRow.classList.add('chat-message-row', 'assistant');
-
       const loadingBubble = document.createElement('div');
       loadingBubble.classList.add('chat-bubble', 'assistant');
-      loadingBubble.textContent = 'Thinking...';
-
       loadingRow.appendChild(loadingBubble);
-      chatWindow.appendChild(loadingRow);
-      chatWindow.scrollTop = chatWindow.scrollHeight;
 
-      try {
-        const res = await fetch('http://localhost:8000/chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {})
-          },
-          body: JSON.stringify({
-            message: question,
-            thread_id: threadId
-          })
-        });
+      if (stagedFile) {
+        // ── Media send ──────────────────────────────────────────
+        const file = stagedFile;
+        const objectURL = stagedObjectURL;
 
-        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        // Show media preview + prompt in user bubble
+        const previewRow = document.createElement('div');
+        previewRow.classList.add('chat-message-row', 'user');
+        const previewBubble = document.createElement('div');
+        previewBubble.classList.add('chat-bubble', 'user');
 
-        const data = await res.json();
-        loadingRow.remove();
-
-        if (data.thread_id) {
-          const isNew = threadId !== data.thread_id;
-          threadId = data.thread_id;
-          localStorage.setItem('spotter_thread_id', threadId);
-          if (isNew) loadConversationList(); // new thread created — refresh list
-        }
-
-        if (data.error) {
-          appendMessage('assistant', `Error: ${data.error}`);
+        if (file.type.startsWith('video/')) {
+          const vid = document.createElement('video');
+          vid.src = objectURL;
+          vid.controls = true;
+          vid.style.cssText = 'max-width:260px;max-height:200px;border-radius:8px;display:block;';
+          previewBubble.appendChild(vid);
         } else {
-          appendMessage('assistant', data.answer);
+          const img = document.createElement('img');
+          img.src = objectURL;
+          img.alt = file.name;
+          img.style.cssText = 'max-width:260px;max-height:200px;border-radius:8px;display:block;';
+          previewBubble.appendChild(img);
         }
-      } catch (err) {
-        loadingBubble.textContent = `Connection error — is the API running? (${err.message})`;
+        if (question) {
+          const caption = document.createElement('p');
+          caption.style.cssText = 'margin:6px 0 0;font-size:0.9rem;';
+          caption.textContent = question;
+          previewBubble.appendChild(caption);
+        }
+        previewRow.appendChild(previewBubble);
+        chatWindow.appendChild(previewRow);
+
+        clearStagedFile();
+
+        loadingBubble.textContent = 'Analyzing...';
+        chatWindow.appendChild(loadingRow);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+
+        try {
+          const formData = new FormData();
+          formData.append('files', file);
+          if (question) formData.append('message', question);
+          if (threadId) formData.append('thread_id', threadId);
+
+          const res = await fetch('http://localhost:8000/chat-with-media', {
+            method: 'POST',
+            headers: accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {},
+            body: formData,
+          });
+
+          const data = await res.json();
+          loadingRow.remove();
+
+          if (data.thread_id) {
+            const isNew = threadId !== data.thread_id;
+            threadId = data.thread_id;
+            localStorage.setItem('spotter_thread_id', threadId);
+            if (isNew) loadConversationList();
+          }
+
+          appendMessage('assistant', data.error ? `Error: ${data.error}` : data.answer);
+        } catch (err) {
+          loadingBubble.textContent = `Connection error — ${err.message}`;
+        }
+
+      } else {
+        // ── Text-only send ──────────────────────────────────────
+        appendMessage('user', question);
+
+        loadingBubble.textContent = 'Thinking...';
+        chatWindow.appendChild(loadingRow);
+        chatWindow.scrollTop = chatWindow.scrollHeight;
+
+        try {
+          const res = await fetch('http://localhost:8000/chat', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(accessToken ? { 'Authorization': `Bearer ${accessToken}` } : {})
+            },
+            body: JSON.stringify({ message: question, thread_id: threadId })
+          });
+
+          if (!res.ok) throw new Error(`Server error: ${res.status}`);
+
+          const data = await res.json();
+          loadingRow.remove();
+
+          if (data.thread_id) {
+            const isNew = threadId !== data.thread_id;
+            threadId = data.thread_id;
+            localStorage.setItem('spotter_thread_id', threadId);
+            if (isNew) loadConversationList();
+          }
+
+          appendMessage('assistant', data.error ? `Error: ${data.error}` : data.answer);
+        } catch (err) {
+          loadingBubble.textContent = `Connection error — is the API running? (${err.message})`;
+        }
       }
     }
 

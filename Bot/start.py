@@ -352,7 +352,14 @@ def build_app(hw_config: dict, db_status: dict, ai_status: dict):
                 "Keep the tone honest but encouraging."
             )
 
-        answer = chat_vision(images_list, prompt)
+        messages = [
+            {"role": "system", "content": "You are an expert AI fitness coach and form analyst."},
+            {"role": "user", "content": [
+                *[{"type": "image", "image": img} for img in images_list],
+                {"type": "text", "text": prompt},
+            ]},
+        ]
+        answer = chat_vision(messages)
         meta = {
             "system": "vision",
             "files": n_imgs + n_vids,
@@ -472,15 +479,16 @@ def build_app(hw_config: dict, db_status: dict, ai_status: dict):
         t0 = time.time()
         saved = []
 
-        for upload in files:
-            if not upload.filename:
-                continue
-            dest = UPLOAD_DIR / f"{_uuid.uuid4().hex}_{upload.filename}"
-            with dest.open("wb") as fh:
-                shutil.copyfileobj(upload.file, fh)
-            saved.append(str(dest))
-
         try:
+            # Use await upload.read() — shutil.copyfileobj is not safe in async context
+            for upload in files:
+                if not upload.filename:
+                    continue
+                dest = UPLOAD_DIR / f"{_uuid.uuid4().hex}_{upload.filename}"
+                contents = await upload.read()
+                dest.write_bytes(contents)
+                saved.append(str(dest))
+
             if not saved:
                 return JSONResponse(
                     {"success": False, "error": "No valid files uploaded"},
